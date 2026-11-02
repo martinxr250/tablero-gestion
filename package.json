@@ -13,7 +13,8 @@
     "db:up": "docker compose up -d",
     "db:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate.ts",
     "setup:dev": "tsx scripts/setup-env.ts && docker compose up -d && sleep 3 && node --env-file-if-exists=.env.local --import tsx scripts/migrate.ts",
-    "storage:setup": "node --env-file-if-exists=.env.local --import tsx scripts/setup-storage.mts"
+    "storage:setup": "node --env-file-if-exists=.env.local --import tsx scripts/setup-storage.mts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

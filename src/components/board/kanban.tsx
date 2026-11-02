@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type Announcements,
@@ -83,7 +84,10 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse: arrastra al moverse 6 px. Táctil: mantener presionado un instante, así el dedo
+    // puede desplazar el tablero sin agarrar tarjetas por accidente.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
       keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space"] },
@@ -468,7 +472,7 @@ function AddCard({ listId, boardId, open, setOpen }: { listId: string; boardId: 
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            if (title.trim()) create.mutate();
+            if (title.trim() && !create.isPending) create.mutate(); // sin doble envío
           }
           if (e.key === "Escape") setOpen(false);
         }}

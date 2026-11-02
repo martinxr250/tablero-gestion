@@ -11,6 +11,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Las pruebas E2E levantan su propio servidor sin pisar la compilación del servidor de desarrollo.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // App 100 % dinámica por sesión: sin Cache Components.
   cacheComponents: false,
   serverExternalPackages: ["@node-rs/argon2"],

@@ -42,6 +42,32 @@ jobs:
       - name: Build
         run: pnpm build
 
+  e2e:
+    name: E2E multiusuario (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: faro
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Claves efímeras solo para esta corrida (no son de producción).
+      - run: pnpm exec tsx scripts/setup-env.ts .env.local
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
   security:
     name: Seguridad (SAST, dependencias, secretos)
     runs-on: ubuntu-latest

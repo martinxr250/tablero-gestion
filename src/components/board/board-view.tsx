@@ -132,7 +132,24 @@ export function BoardView({ boardId }: { boardId: string }) {
   const q = useQuery({ queryKey: ["board", boardId], queryFn: () => api<BoardData>(`/boards/${boardId}`) });
   useSyncOrg(q.data?.board.orgId);
 
-  const [filters, setFilters] = useState<Filters>(EMPTY);
+  // Filtros recordados por tablero en este navegador (si no se puede leer, arranca vacío).
+  const filterKey = `tableros.filters.${boardId}`;
+  const [filters, setFiltersState] = useState<Filters>(() => {
+    if (typeof window === "undefined") return EMPTY;
+    try {
+      return { ...EMPTY, ...(JSON.parse(localStorage.getItem(filterKey) ?? "{}") as Partial<Filters>) };
+    } catch {
+      return EMPTY;
+    }
+  });
+  const setFilters = (f: Filters) => {
+    setFiltersState(f);
+    try {
+      localStorage.setItem(filterKey, JSON.stringify(f));
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  };
   const compactHeader = useSyncExternalStore(subscribeHeader, readHeaderCompact, () => true);
   const [highlight, setHighlight] = useState<Set<string>>(new Set());
   const [panel, setPanel] = useState<"settings" | "archived" | "activity" | "bulk" | "duplicate" | null>(null);

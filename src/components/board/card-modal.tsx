@@ -7,7 +7,7 @@ import {
   Paperclip, Plus, RotateCcw, Tag, Trash2, Upload, UserRound, Users, X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/user-avatar";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -39,6 +39,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
   const source = useQuery({ queryKey: ["board", card?.boardId], queryFn: () => api<BoardData>(`/boards/${card!.boardId}`), enabled: isMirror });
   const board = (isMirror ? source.data : viewBoard) ?? viewBoard;
   const loadingSource = isMirror && !source.data;
+  const descriptionDirty = useRef(false);
   const canEdit = (q.data?.role === "editor" || q.data?.role === "admin") && !board.board.archivedAt;
   const canComment = canEdit || (q.data?.role === "commenter" && !board.board.archivedAt);
 
@@ -54,7 +55,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
   });
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={card ? <CardTitle key={card.title} card={card} canEdit={canEdit} onSave={(title) => patch.mutate({ title })} /> : "Cargando…"}>
+    <Dialog open onOpenChange={(o) => !o && (!descriptionDirty.current || confirm("Tenés cambios sin guardar en la descripción. ¿Cerrar igual?")) && onClose()} wide title={card ? <CardTitle key={card.title} card={card} canEdit={canEdit} onSave={(title) => patch.mutate({ title })} /> : "Cargando…"}>
       {q.error ? (
         <p className="text-sm text-destructive">{q.error instanceof ApiError && q.error.status === 404 ? "La tarjeta no existe o no tenés acceso." : (q.error as Error).message}</p>
       ) : !card || loadingSource ? (
@@ -88,7 +89,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
             <QaPanel card={card} board={board} canEdit={canEdit} refresh={refresh} />
             <CompletionPanel card={card} />
             <CardFields card={card} board={board} canEdit={canEdit} refresh={refresh} />
-            <Description card={card} canEdit={canEdit} onSave={(description) => patch.mutateAsync({ description, expectedUpdatedAt: card.updatedAt })} />
+            <Description card={card} canEdit={canEdit} dirtyRef={descriptionDirty} onSave={(description) => patch.mutateAsync({ description, expectedUpdatedAt: card.updatedAt })} />
             <Subtasks card={card} board={board} canEdit={canEdit} refresh={refresh} onOpenCard={onOpenCard} />
             <Checklists card={card} canEdit={canEdit} refresh={refresh} />
             <Attachments card={card} canEdit={canEdit} refresh={refresh} />
@@ -197,10 +198,24 @@ function MetaRow({ card, board }: { card: CardDetail; board: BoardData }) {
   );
 }
 
-function Description({ card, canEdit, onSave }: { card: CardDetail; canEdit: boolean; onSave: (d: JSONContent | null) => Promise<unknown> }) {
+function Description({ card, canEdit, onSave, dirtyRef }: { card: CardDetail; canEdit: boolean; onSave: (d: JSONContent | null) => Promise<unknown>; dirtyRef: { current: boolean } }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<JSONContent | null>(null);
   const [saving, setSaving] = useState(false);
+  // Cambios sin guardar: se avisa antes de salir de la página.
+  useEffect(() => {
+    if (!editing) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editing, dirtyRef]);
+  const stopEditing = () => {
+    dirtyRef.current = false;
+    setDraft(null);
+    setEditing(false);
+  };
   const empty = !card.description;
   return (
     <section>
@@ -218,7 +233,14 @@ function Description({ card, canEdit, onSave }: { card: CardDetail; canEdit: boo
       </SectionTitle>
       {editing ? (
         <div className="space-y-2">
-          <RichEditor value={card.description} editable onChange={setDraft} />
+          <RichEditor
+            value={card.description}
+            editable
+            onChange={(d) => {
+              dirtyRef.current = true;
+              setDraft(d);
+            }}
+          />
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -228,7 +250,7 @@ function Description({ card, canEdit, onSave }: { card: CardDetail; canEdit: boo
                 try {
                   const isEmpty = draft && JSON.stringify(draft) === '{"type":"doc","content":[{"type":"paragraph"}]}';
                   await onSave(isEmpty ? null : (draft ?? (card.description as JSONContent)));
-                  setEditing(false);
+                  stopEditing();
                 } finally {
                   setSaving(false);
                 }
@@ -236,7 +258,7 @@ function Description({ card, canEdit, onSave }: { card: CardDetail; canEdit: boo
             >
               Guardar
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            <Button variant="ghost" size="sm" onClick={() => (!dirtyRef.current || confirm("¿Descartar los cambios de la descripción?")) && stopEditing()}>
               Cancelar
             </Button>
           </div>
