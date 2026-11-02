@@ -1,0 +1,11 @@
+# Vulnerabilidades aceptadas con motivo y vencimiento: al vencer, el CI vuelve a fallar y se revisan.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "deepmerge 4.3.1 sin versión corregida. Solo lo usa la CLI de shadcn (dependencia de desarrollo); no llega a la app publicada."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "minimatch 3.x y 10.x: la corrección (11.x) no es compatible con ESLint y otras herramientas de desarrollo que la usan. Solo procesa patrones propios del repositorio, no datos de usuarios."
