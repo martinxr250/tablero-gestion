@@ -12,7 +12,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </span>
       </div>
       <div className="w-full max-w-[26rem] rounded-[1.75rem] border bg-card p-8 shadow-card">{children}</div>
-      <p className="mt-6 text-xs text-muted-foreground">Tableros · organizá el trabajo de tu equipo</p>
     </main>
   );
 }

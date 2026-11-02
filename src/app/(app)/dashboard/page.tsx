@@ -158,10 +158,10 @@ export default function DashboardPage() {
                 ))}
               </div>
             </section>
-            <Card className="p-5">
+            <Card className="flex max-h-96 flex-col p-5">
               <h2 className="mb-3 font-semibold">Actividad reciente</h2>
               {data && data.activity.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Sin actividad todavía.</p>}
-              <ul className="space-y-3">
+              <ul className="-mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-2 scroll-thin" tabIndex={0} aria-label="Actividad reciente">
                 {data?.activity.map((a) => (
                   <li key={a.id} className="text-sm">
                     <Link href={`/b/${a.boardId}${a.cardId ? `?card=${a.cardId}` : ""}`} className="hover:underline">
