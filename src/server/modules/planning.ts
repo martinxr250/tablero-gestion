@@ -8,6 +8,7 @@ import { AppError, badRequest, conflict, forbidden, notFound } from "../core/err
 import { uuidv7 } from "../core/ids";
 import { withUser, type Tx } from "../db/client";
 import {
+  boardFields,
   boardMembers,
   boards,
   cardAssignees,
@@ -25,6 +26,7 @@ import {
 import { createIssueForCard } from "../integrations/sync";
 import { boardAccess, boardUserRoles, cardAccess, workspaceAccess } from "./access";
 import { positionAfter } from "./positions";
+import { copyFieldValues, fieldValueText, fieldValuesByCard } from "./fields";
 import { sanitizeRichText } from "./richtext";
 import { COLORS, logActivity, notify, type NotificationType } from "./shared";
 import { BUILTIN_TEMPLATES, copyBoardContents } from "./templates";
@@ -170,6 +172,7 @@ async function duplicateCard(tx: Tx, card: Card, actorId: string) {
       await tx.insert(checklistItems).values(items.map((i) => ({ id: uuidv7(), orgId: i.orgId, checklistId: kid, text: i.text, position: i.position, doneAt: i.doneAt })));
     }
   }
+  await copyFieldValues(tx, card.id, id);
   return id;
 }
 
@@ -593,10 +596,10 @@ export const planningRoutes = [
     tag: "Planificación",
     rateLimit: [{ name: "export", by: "user", limit: 30, windowSec: 3600 }],
     handler: async ({ me, params }) => {
-      const { board, rows } = await withUser(me.id, async (tx) => {
+      const { board, rows, fields, values } = await withUser(me.id, async (tx) => {
         const { board } = await boardAccess(tx, { actorId: me.id }, params.boardId, "view", { allowArchived: true });
         const rows = await tx.execute<Record<string, unknown>>(sql`
-          select c.title, l.name as list, c.priority, o.name as owner,
+          select c.id, c.title, l.name as list, c.priority, o.name as owner,
             (select string_agg(u.name, ', ') from app.card_assignees a join app.users u on u.id = a.user_id where a.card_id = c.id) as assignees,
             (select string_agg(lb.name, ', ') from app.card_labels x join app.labels lb on lb.id = x.label_id where x.card_id = c.id) as labels,
             to_char(c.due_at at time zone 'UTC', 'YYYY-MM-DD') as due, c.estimate_points as estimate, s.name as sprint, c.qa_status as qa,
@@ -610,13 +613,15 @@ export const planningRoutes = [
           left join app.cards p on p.id = c.parent_id
           where c.board_id = ${board.id} and c.archived_at is null
           order by l.position, c.position`);
-        return { board, rows };
+        const fields = await tx.select().from(boardFields).where(eq(boardFields.boardId, board.id)).orderBy(asc(boardFields.position));
+        const values = await fieldValuesByCard(tx, rows.map((r) => String(r.id)));
+        return { board, rows, fields, values };
       });
-      const header = ["Título", "Lista", "Prioridad", "Responsable", "Colaboradores", "Etiquetas", "Vencimiento", "Estimación", "Etapa", "Control de calidad", "Completada", "Tarea principal", "Descripción", "Issue", "Creada"];
+      const header = ["Título", "Lista", "Prioridad", "Responsable", "Colaboradores", "Etiquetas", "Vencimiento", "Estimación", "Etapa", "Control de calidad", "Completada", "Tarea principal", "Descripción", "Issue", "Creada", ...fields.map((f) => f.name)];
       const lines = [header.map(csvCell).join(",")];
       for (const r of rows) {
         lines.push(
-          [r.title, r.list, PRIORITY_LABEL[String(r.priority)] ?? "", r.owner, r.assignees, r.labels, r.due, r.estimate, r.sprint, QA_LABEL[String(r.qa)] ?? "", r.completed, r.parent, r.description, r.issue ? `#${r.issue}` : "", r.created]
+          [r.title, r.list, PRIORITY_LABEL[String(r.priority)] ?? "", r.owner, r.assignees, r.labels, r.due, r.estimate, r.sprint, QA_LABEL[String(r.qa)] ?? "", r.completed, r.parent, r.description, r.issue ? `#${r.issue}` : "", r.created, ...fields.map((f) => fieldValueText(f, values.get(String(r.id))?.[f.id]))]
             .map(csvCell)
             .join(","),
         );

@@ -1,10 +1,12 @@
 "use client";
 
 import { Ban, Calendar, CheckCircle2, CheckSquare, CircleDot, CornerDownRight, Flag, ListTree, MessageSquare, Paperclip, Repeat, ShieldCheck, Tag } from "lucide-react";
+import { createContext, useContext } from "react";
 import { Avatar } from "@/components/ui/user-avatar";
-import { PRIORITY } from "@/lib/colors";
+import { asColor, CHIP, PRIORITY } from "@/lib/colors";
+import { fieldDisplay } from "@/lib/fields";
 import { dueState, fmtDate } from "@/lib/format";
-import type { CardSummary, Label, Person } from "@/lib/types";
+import type { BoardField, CardSummary, Label, Person } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const QA_LABEL = { none: "", pending: "En revisión", approved: "Aprobada", rejected: "Rechazada" } as const;
@@ -14,6 +16,9 @@ const QA_CHIP = {
   approved: "bg-success/15 text-success",
   rejected: "bg-brand-soft text-brand",
 } as const;
+
+/** Campos personalizados del tablero visibles en el frente de las tarjetas. */
+export const CardFieldsContext = createContext<BoardField[]>([]);
 
 /** Tarjeta del tablero: prioridad, responsable, fecha, extracto y pie con archivos y etiquetas. */
 export function CardTile({
@@ -34,6 +39,10 @@ export function CardTile({
   const extra = card.assigneeIds.filter((id) => id !== owner?.userId).length;
   const p = PRIORITY[card.priority] ?? PRIORITY.none!;
   const labelNames = card.labelIds.map((id) => labels.get(id)?.name).filter(Boolean) as string[];
+  const fieldChips = useContext(CardFieldsContext)
+    .filter((f) => f.showOnCard)
+    .map((f) => ({ f, text: fieldDisplay(f, card.fieldValues?.[f.id]) }))
+    .filter((x) => x.text);
 
   return (
     <div
@@ -101,6 +110,23 @@ export function CardTile({
                 <Calendar className="size-3.5" aria-hidden /> {fmtDate(card.dueAt)}
               </span>
             )}
+          </div>
+        )}
+
+        {fieldChips.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {fieldChips.map(({ f, text }) => {
+              const option = f.type === "select" ? f.config.options?.find((o) => o.id === card.fieldValues[f.id]) : null;
+              return (
+                <span
+                  key={f.id}
+                  className={cn("inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px]", option ? CHIP[asColor(option.color)] : "bg-muted text-muted-foreground")}
+                  title={`${f.name}: ${text}`}
+                >
+                  <span className="opacity-70">{f.name}:</span> <span className="truncate font-medium">{text}</span>
+                </span>
+              );
+            })}
           </div>
         )}
 

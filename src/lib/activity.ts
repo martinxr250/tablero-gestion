@@ -47,6 +47,9 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "card.recurred": return `programó la próxima "${t}"`;
     case "card.duplicated": return `duplicó "${t}"`;
     case "card.subtask_created": return `agregó la subtarea "${t}" a "${s(d.parent)}"`;
+    case "field.created": return `creó el campo "${s(d.name)}"`;
+    case "field.deleted": return `eliminó el campo "${s(d.name)}"`;
+    case "card.field_set": return d.value ? `puso ${s(d.field)} = "${s(d.value)}" en "${t}"` : `borró ${s(d.field)} en "${t}"`;
     case "share.enabled": return d.kind === "public" ? "activó el enlace público de solo lectura" : "activó el enlace para unirse";
     case "share.updated": return "cambió el permiso del enlace para unirse";
     case "share.regenerated": return d.kind === "public" ? "generó un enlace público nuevo" : "generó un enlace nuevo para unirse";

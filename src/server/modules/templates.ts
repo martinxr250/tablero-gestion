@@ -7,6 +7,7 @@ import { uuidv7 } from "../core/ids";
 import type { Tx } from "../db/client";
 import { boards, cardLabels, cards, checklistItems, checklists, labels, lists, myBoards } from "../db/schema";
 import type { ColorName } from "./shared";
+import { copyBoardFields, copyFieldValues } from "./fields";
 
 type Builtin = {
   name: string;
@@ -103,6 +104,7 @@ export async function copyBoardContents(
       doneListId: source.doneListId ? (listMap.get(source.doneListId) ?? null) : null,
     })
     .where(eq(boards.id, targetBoardId));
+  const fieldMap = await copyBoardFields(tx, orgId, sourceBoardId, targetBoardId);
   if (!input.includeCards) return;
 
   const srcCards = await tx.select().from(cards).where(and(eq(cards.boardId, sourceBoardId), isNull(cards.archivedAt))).orderBy(asc(cards.position));
@@ -147,4 +149,5 @@ export async function copyBoardContents(
     const items = await tx.select().from(checklistItems).where(eq(checklistItems.checklistId, k.id));
     if (items.length) await tx.insert(checklistItems).values(items.map((i) => ({ id: uuidv7(), orgId, checklistId: id, text: i.text, position: i.position })));
   }
+  for (const [from, to] of cardMap) await copyFieldValues(tx, from, to, fieldMap);
 }

@@ -6,7 +6,7 @@ import { audit } from "../core/audit";
 import { badRequest, conflict, forbidden, notFound } from "../core/errors";
 import { uuidv7 } from "../core/ids";
 import { withUser, type Tx } from "../db/client";
-import {
+import { cardFieldValues,
   activityLogs,
   attachments,
   cardAssignees,
@@ -127,6 +127,7 @@ async function cardDetail(tx: Tx, cardId: string, viewerId?: string) {
     estimatePoints: card.estimatePoints,
     recurrence: card.recurrence,
     qa: { status: card.qaStatus, by: qaReviewer[0]?.name ?? null, at: card.qaAt, note: card.qaNote },
+    fieldValues: Object.fromEntries((await tx.select().from(cardFieldValues).where(eq(cardFieldValues.cardId, card.id))).map((v) => [v.fieldId, v.value])),
     watcherCount: watchers.length,
     watching: viewerId ? watchers.some((w) => w.userId === viewerId) : false,
     relations: relationRows.map((r) => ({

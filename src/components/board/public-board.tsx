@@ -10,9 +10,9 @@ import { ErrorState, Skeleton } from "@/components/ui/primitives";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { api, ApiError } from "@/lib/api";
 import { asColor, SWATCH } from "@/lib/colors";
-import type { CardSummary, Label, List, Person } from "@/lib/types";
+import type { BoardField, CardSummary, Label, List, Person } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CardTile } from "./card-tile";
+import { CardFieldsContext, CardTile } from "./card-tile";
 import { RichEditor } from "./rich-editor";
 
 type PublicData = {
@@ -20,6 +20,7 @@ type PublicData = {
   lists: List[];
   cards: CardSummary[];
   labels: Label[];
+  fields: BoardField[];
   people: { userId: string; name: string }[];
 };
 type PublicCard = {
@@ -125,6 +126,7 @@ export function PublicBoard({ token }: { token: string }) {
           ))}
         </div>
       ) : (
+        <CardFieldsContext value={q.data.fields}>
         <main className="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto p-4 scroll-thin sm:p-6">
           {q.data.lists.map((l) => {
             const listCards = q.data!.cards.filter((c) => c.listId === l.id);
@@ -145,6 +147,7 @@ export function PublicBoard({ token }: { token: string }) {
             );
           })}
         </main>
+        </CardFieldsContext>
       )}
       {open && <CardDetail token={token} cardId={open} onClose={() => setOpen(null)} />}
     </div>

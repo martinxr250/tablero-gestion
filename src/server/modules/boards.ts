@@ -9,6 +9,7 @@ import { withUser, type Tx } from "../db/client";
 import { activityLogs, boardMembers, boards, cards, labels, lists, organizationMembers, sprints, users, workspaces } from "../db/schema";
 import { applyTemplate, templateSchema } from "./templates";
 import { sendMail } from "../email/mailer";
+import { listBoardFields } from "./fields";
 import { boardAccess, workspaceAccess } from "./access";
 import { emailSchema } from "./auth";
 import { createInvitation } from "./orgs";
@@ -27,6 +28,7 @@ const listName = z.string().trim().min(1, "Ingresá un nombre").max(80);
 const afterId = z.uuid().nullable().optional();
 
 type CardSummaryRow = {
+  field_values: Record<string, string | number | boolean>;
   id: string;
   list_id: string;
   title: string;
@@ -71,6 +73,7 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
       (select count(*)::int from app.checklist_items i join app.checklists k on k.id = i.checklist_id
          where k.card_id = c.id and i.done_at is not null) as checklist_done,
       c.parent_id, c.sprint_id, c.estimate_points, c.recurrence, c.qa_status,
+      coalesce((select jsonb_object_agg(v.field_id, v.value) from app.card_field_values v where v.card_id = c.id), '{}'::jsonb) as field_values,
       (select count(*)::int from app.cards s where s.parent_id = c.id and s.archived_at is null) as subtask_total,
       (select count(*)::int from app.cards s where s.parent_id = c.id and s.archived_at is null and s.completed_at is not null) as subtask_done,
       -- Bloqueada: otra tarjeta sin terminar la bloquea.
@@ -109,6 +112,7 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
     subtaskTotal: r.subtask_total,
     subtaskDone: r.subtask_done,
     blocked: r.blocked,
+    fieldValues: r.field_values,
   }));
 }
 
@@ -184,6 +188,7 @@ export const boardRoutes = [
           tx.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, board.workspaceId)),
           tx.select().from(sprints).where(eq(sprints.boardId, board.id)).orderBy(asc(sprints.startsOn)),
         ]);
+        const fields = await listBoardFields(tx, board.id);
         const meRow = people.find((p) => p.user_id === me.id);
         return {
           board: {
@@ -216,6 +221,7 @@ export const boardRoutes = [
           lists: listRows.map((l) => ({ id: l.id, name: l.name, color: l.color, position: l.position })),
           cards: cardRows,
           labels: labelRows.map((l) => ({ id: l.id, name: l.name, color: l.color })),
+          fields,
           people: people.map((p) => ({ userId: p.user_id, name: p.name, email: p.email, hasAvatar: p.has_avatar, role: p.role, canReview: p.can_review })),
           cursor: Number(cursor?.max ?? 0),
         };

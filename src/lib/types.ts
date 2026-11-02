@@ -15,6 +15,15 @@ export type WorkspaceTree = {
 
 export type Person = { userId: string; name: string; email: string; hasAvatar: boolean; role: string; canReview?: boolean };
 export type Label = { id: string; name: string; color: string };
+export type FieldType = "text" | "number" | "currency" | "date" | "checkbox" | "select";
+export type FieldValue = string | number | boolean;
+export type BoardField = {
+  id: string;
+  name: string;
+  type: FieldType;
+  config: { options?: { id: string; name: string; color: string }[]; currency?: string };
+  showOnCard: boolean;
+};
 export type List = { id: string; name: string; color: string; position: string };
 
 export type CardSummary = {
@@ -45,6 +54,7 @@ export type CardSummary = {
   subtaskTotal: number;
   subtaskDone: number;
   blocked: boolean;
+  fieldValues: Record<string, FieldValue>;
 };
 
 export type QaStatus = "none" | "pending" | "approved" | "rejected";
@@ -82,6 +92,7 @@ export type BoardData = {
   lists: List[];
   cards: CardSummary[];
   labels: Label[];
+  fields: BoardField[];
   people: Person[];
   cursor: number;
 };
@@ -111,6 +122,7 @@ export type CardDetail = {
   estimatePoints: number | null;
   recurrence: "weekly" | "monthly" | null;
   qa: { status: QaStatus; by: string | null; at: string | null; note: string | null };
+  fieldValues: Record<string, FieldValue>;
   watcherCount: number;
   watching: boolean;
   relations: { cardId: string; title: string; boardId: string; boardName: string; type: string; direction: "in" | "out"; completed: boolean }[];

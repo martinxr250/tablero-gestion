@@ -19,6 +19,7 @@ import { asColor, CHIP, PRIORITY, type ColorName } from "@/lib/colors";
 import { ago, dueState, fmtDateTime, toLocalInput } from "@/lib/format";
 import type { Activity, BoardData, BoardRole, CardDetail, Comment } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CardFields } from "./card-fields";
 import { CardBanners, PlanningSidebar, QaPanel, Subtasks } from "./card-planning";
 import { DevPanel } from "./dev-panel";
 import { RichEditor } from "./rich-editor";
@@ -70,6 +71,7 @@ export function CardModal({ cardId, board, onClose, onOpenCard }: { cardId: stri
             <CardBanners card={card} onOpenCard={onOpenCard} />
             <MetaRow card={card} board={board} />
             <QaPanel card={card} board={board} canEdit={canEdit} refresh={refresh} />
+            <CardFields card={card} board={board} canEdit={canEdit} refresh={refresh} />
             <Description card={card} canEdit={canEdit} onSave={(description) => patch.mutateAsync({ description, expectedUpdatedAt: card.updatedAt })} />
             <Subtasks card={card} board={board} canEdit={canEdit} refresh={refresh} onOpenCard={onOpenCard} />
             <Checklists card={card} canEdit={canEdit} refresh={refresh} />

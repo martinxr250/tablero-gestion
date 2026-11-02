@@ -25,7 +25,7 @@ import { api } from "@/lib/api";
 import { asColor, SWATCH } from "@/lib/colors";
 import type { BoardData, CardSummary, Label, Person } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CardTile } from "./card-tile";
+import { CardFieldsContext, CardTile } from "./card-tile";
 
 const LIST_PREFIX = "L:";
 const isListId = (id: string) => id.startsWith(LIST_PREFIX);
@@ -159,6 +159,7 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
   const dndEnabled = canEdit && !filtering;
 
   return (
+    <CardFieldsContext value={data.fields}>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -217,6 +218,7 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
         ) : null}
       </DragOverlay>
     </DndContext>
+    </CardFieldsContext>
   );
 }
 

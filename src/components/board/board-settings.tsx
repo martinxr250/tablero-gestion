@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { asColor, CHIP, type ColorName } from "@/lib/colors";
 import type { BoardData } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { FieldsSettings } from "./fields-settings";
 import { RepoSettings } from "./repo-settings";
 import { ShareSettings } from "./share-settings";
 
@@ -30,6 +31,7 @@ export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClos
           { value: "general", label: "General" },
           { value: "members", label: "Miembros" },
           { value: "labels", label: "Etiquetas" },
+          { value: "fields", label: "Campos" },
           { value: "share", label: "Compartir" },
           { value: "github", label: "GitHub" },
         ]}
@@ -42,6 +44,9 @@ export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClos
         </TabPanel>
         <TabPanel value="labels">
           <Labels data={data} />
+        </TabPanel>
+        <TabPanel value="fields">
+          <FieldsSettings data={data} />
         </TabPanel>
         <TabPanel value="share">
           <ShareSettings boardId={data.board.id} />

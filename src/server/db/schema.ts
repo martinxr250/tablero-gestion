@@ -484,3 +484,29 @@ export const boardShareLinks = app.table("board_share_links", {
   createdBy: uuid("created_by"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+export type FieldType = "text" | "number" | "currency" | "date" | "checkbox" | "select";
+export type FieldConfig = { options?: { id: string; name: string; color: string }[]; currency?: string };
+export const boardFields = app.table("board_fields", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  name: text("name").notNull(),
+  type: text("type").$type<FieldType>().notNull(),
+  config: jsonb("config").$type<FieldConfig>().notNull().default({}),
+  showOnCard: boolean("show_on_card").notNull().default(true),
+  position: text("position").notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const cardFieldValues = app.table(
+  "card_field_values",
+  {
+    orgId: uuid("org_id").notNull(),
+    cardId: uuid("card_id").notNull(),
+    fieldId: uuid("field_id").notNull(),
+    value: jsonb("value").$type<string | number | boolean>().notNull(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.fieldId] })],
+);

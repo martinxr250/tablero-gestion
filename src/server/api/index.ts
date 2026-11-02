@@ -11,6 +11,7 @@ import { cronRoutes } from "../modules/cron";
 import { integrationRoutes } from "../modules/integrations";
 import { planningRoutes } from "../modules/planning";
 import { shareRoutes } from "../modules/share";
+import { fieldRoutes } from "../modules/fields";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -24,6 +25,7 @@ const domainRoutes: RouteDef[] = [
   ...integrationRoutes,
   ...planningRoutes,
   ...shareRoutes,
+  ...fieldRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

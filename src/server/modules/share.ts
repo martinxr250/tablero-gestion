@@ -24,6 +24,7 @@ import {
 } from "../db/schema";
 import { boardAccess } from "./access";
 import { boardCards, boardPeople } from "./boards";
+import { listBoardFields } from "./fields";
 import { logActivity } from "./shared";
 
 const ROLE_RANK = { viewer: 0, commenter: 1, editor: 2, admin: 3 } as const;
@@ -127,12 +128,14 @@ export const shareRoutes = [
           boardPeople(tx, board.id),
         ]);
         const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, board.orgId));
+        const fields = await listBoardFields(tx, board.id);
         // Sin datos internos: ni correos, ni comentarios, ni adjuntos, ni integraciones.
         return {
           board: { name: board.name, description: board.description, color: board.color, orgName: org?.name ?? "", archived: !!board.archivedAt },
           lists: listRows.map((l) => ({ id: l.id, name: l.name, color: l.color, position: l.position })),
           cards: cardRows.map((c) => ({ ...c, issueNumber: null, syncAttention: false, commentCount: 0, attachmentCount: 0 })),
           labels: labelRows.map((l) => ({ id: l.id, name: l.name, color: l.color })),
+          fields,
           people: people.map((p) => ({ userId: p.user_id, name: p.name })),
         };
       }),

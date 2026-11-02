@@ -10,6 +10,7 @@ const SCOPES = {
   cards: "list_id",
   checklists: "card_id",
   checklist_items: "checklist_id",
+  board_fields: "board_id",
 } as const;
 
 export type PositionTable = keyof typeof SCOPES;

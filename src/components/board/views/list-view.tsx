@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/user-avatar";
 import { PRIORITY } from "@/lib/colors";
 import { dueState, fmtDate } from "@/lib/format";
 import type { BoardData, CardSummary } from "@/lib/types";
+import { fieldDisplay } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
 type SortKey = "title" | "list" | "owner" | "priority" | "due" | "estimate" | "sprint";
@@ -59,6 +60,11 @@ export function ListView({ data, visible, onOpenCard }: { data: BoardData; visib
               {header("due", "Vence")}
               {header("estimate", "Puntos")}
               {header("sprint", "Etapa")}
+              {data.fields.map((f) => (
+                <th key={f.id} scope="col" className="px-3 py-3 text-left text-xs font-medium whitespace-nowrap text-muted-foreground">
+                  {f.name}
+                </th>
+              ))}
               <th scope="col" className="px-3 py-3 pr-6 text-left text-xs font-medium text-muted-foreground">Estado</th>
             </tr>
           </thead>
@@ -90,6 +96,11 @@ export function ListView({ data, visible, onOpenCard }: { data: BoardData; visib
                   <td className={cn("px-3 py-3 tabular-nums", due === "overdue" && "text-destructive", due === "soon" && "text-amber-600 dark:text-amber-300")}>{c.dueAt ? fmtDate(c.dueAt) : "—"}</td>
                   <td className="px-3 py-3 tabular-nums">{c.estimatePoints ?? "—"}</td>
                   <td className="px-3 py-3 text-muted-foreground">{(c.sprintId && sprints.get(c.sprintId)?.name) || "—"}</td>
+                  {data.fields.map((f) => (
+                    <td key={f.id} className="px-3 py-3 whitespace-nowrap tabular-nums">
+                      {fieldDisplay(f, c.fieldValues[f.id]) || <span className="text-muted-foreground">—</span>}
+                    </td>
+                  ))}
                   <td className="px-3 py-3 pr-6">
                     {c.completedAt ? (
                       <span className="text-success">Completada</span>
