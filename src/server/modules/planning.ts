@@ -31,6 +31,8 @@ import { sanitizeRichText } from "./richtext";
 import { COLORS, logActivity, notify, type NotificationType } from "./shared";
 import { BUILTIN_TEMPLATES, copyBoardContents } from "./templates";
 import { evaluateCompletion } from "./delivery";
+import { notifyUnblocked } from "./dependencies";
+import { boardSignals } from "./signals";
 
 type Board = typeof boards.$inferSelect;
 type Card = typeof cards.$inferSelect;
@@ -319,7 +321,10 @@ export const planningRoutes = [
           cardId: card.id,
           data: { cardTitle: card.title, boardName: board.name, note: body.note },
         });
-        if (approved && patch.completedAt) await spawnRecurrence(tx, { ...card, ...patch } as Card, me.id);
+        if (approved && patch.completedAt) {
+          await notifyUnblocked(tx, card, me.id);
+          await spawnRecurrence(tx, { ...card, ...patch } as Card, me.id);
+        }
         // Si quedan reglas bloqueantes, la aprobación se registra pero la tarea no se cierra todavía.
         return { status: patch.qaStatus, completed: !!patch.completedAt, pending: pending.map((r) => ({ rule: r.key, detail: r.detail })) };
       }),
@@ -587,6 +592,7 @@ export const planningRoutes = [
           blocked: blocked.map((b) => ({ id: b.id, title: b.title, blockers: b.blockers })),
           qa,
           sprint,
+          ...(await boardSignals(tx, board)),
         };
       }),
   }),

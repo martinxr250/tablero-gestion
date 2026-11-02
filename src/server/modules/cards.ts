@@ -33,6 +33,7 @@ import { schedulePush } from "../integrations/sync";
 import { assertSprintInBoard, assertValidParent, notifyWatchers, qaOnMove, spawnRecurrence } from "./planning";
 import { cardMirrorList } from "./mirrors";
 import { assertCompletion, type RuleResult } from "./delivery";
+import { assertNoCycle, notifyBlocked, notifyUnblocked } from "./dependencies";
 
 const title = z.string().trim().min(1, "Ingresá un título").max(200);
 const priority = z.enum(["none", "low", "medium", "high", "urgent"]);
@@ -276,6 +277,7 @@ export const cardRoutes = [
         }
         if (body.completed === true && changed.includes("completed")) {
           await notifyWatchers(tx, { card, board, actorId: me.id, type: "card.completed" });
+          await notifyUnblocked(tx, card, me.id);
           await spawnRecurrence(tx, { ...card, ...patch } as typeof card, me.id);
         }
         return { card: await cardDetail(tx, card.id, me.id) };
@@ -431,8 +433,10 @@ export const cardRoutes = [
         if (body.toCardId === card.id) throw badRequest("Una tarjeta no puede relacionarse consigo misma");
         const { card: other } = await cardAccess(tx, actx, body.toCardId, "view");
         if (other.orgId !== card.orgId) throw notFound("Tarjeta");
+        if (body.type === "blocks") await assertNoCycle(tx, card.id, other.id);
         await tx.insert(cardRelations).values({ orgId: card.orgId, fromCardId: card.id, toCardId: other.id, type: body.type, createdBy: me.id }).onConflictDoNothing();
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action: "card.relation_added", data: { title: card.title, other: other.title, type: body.type } });
+        if (body.type === "blocks") await notifyBlocked(tx, card, other, me.id);
         return { ok: true };
       }),
   }),

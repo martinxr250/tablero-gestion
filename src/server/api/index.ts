@@ -15,6 +15,8 @@ import { fieldRoutes } from "../modules/fields";
 import { workRoutes } from "../modules/work";
 import { mirrorRoutes } from "../modules/mirrors";
 import { deliveryRoutes } from "../modules/delivery";
+import { signalRoutes } from "../modules/signals";
+import { notificationSettingsRoutes } from "../modules/notification-settings";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -32,6 +34,8 @@ const domainRoutes: RouteDef[] = [
   ...workRoutes,
   ...mirrorRoutes,
   ...deliveryRoutes,
+  ...signalRoutes,
+  ...notificationSettingsRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [
