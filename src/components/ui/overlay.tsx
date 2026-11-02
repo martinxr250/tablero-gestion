@@ -68,12 +68,12 @@ export function PopoverContent({ className, align = "start", ...props }: Compone
 export function Tabs({ value, onValueChange, tabs, children }: { value: string; onValueChange: (v: string) => void; tabs: { value: string; label: string }[]; children: ReactNode }) {
   return (
     <UiTabs value={value} onValueChange={onValueChange} className="gap-5">
-      <TabsList aria-label="Secciones" className="h-auto w-fit max-w-full flex-wrap gap-1.5 rounded-full border bg-card p-1.5">
+      <TabsList aria-label="Secciones" className="h-auto w-fit max-w-full flex-wrap gap-1.5 rounded-full border bg-card p-1.5 group-data-horizontal/tabs:h-auto">
         {tabs.map((t) => (
           <TabsTrigger
             key={t.value}
             value={t.value}
-            className="h-9 flex-none rounded-full px-4 text-sm data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
+            className="h-9 flex-none rounded-full px-4 py-0 text-sm after:hidden data-[state=active]:border-transparent data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-foreground"
           >
             {t.label}
           </TabsTrigger>
