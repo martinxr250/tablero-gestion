@@ -4,7 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { Activity as ActivityIcon, Archive, CalendarDays, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Copy, FileDown, Filter, Gauge, LayoutGrid, List as ListIcon, ListPlus, Milestone, Flame, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, ViewTransition } from "react";
 import { toast } from "sonner";
 import { useOrg, useSyncOrg } from "@/components/shell/org-context";
 import { Avatar, AvatarStack } from "@/components/ui/user-avatar";
@@ -391,13 +391,15 @@ export function BoardView({ boardId }: { boardId: string }) {
           ))}
         </div>
       </nav>
-      <div className="min-h-0 flex-1">
-        {view === "board" && <Kanban data={data} canEdit={canEdit} visible={visible} filtering={filtering} highlight={highlight} onOpenCard={(id) => openCard(id)} />}
-        {view === "list" && <ListView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
-        {view === "calendar" && <CalendarView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
-        {view === "sprints" && <SprintsView data={data} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
-        {view === "insights" && <InsightsView boardId={data.board.id} onOpenCard={(id) => openCard(id)} />}
-      </div>
+      <ViewTransition key={view} enter="page-enter" exit="page-exit" default="none">
+        <div className="min-h-0 flex-1">
+          {view === "board" && <Kanban data={data} canEdit={canEdit} visible={visible} filtering={filtering} highlight={highlight} onOpenCard={(id) => openCard(id)} />}
+          {view === "list" && <ListView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
+          {view === "calendar" && <CalendarView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
+          {view === "sprints" && <SprintsView data={data} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
+          {view === "insights" && <InsightsView boardId={data.board.id} onOpenCard={(id) => openCard(id)} />}
+        </div>
+      </ViewTransition>
       <BulkDialog data={data} open={panel === "bulk"} onOpenChange={(o) => setPanel(o ? "bulk" : null)} />
       {panel === "duplicate" && <DuplicateBoardDialog data={data} onClose={() => setPanel(null)} />}
       {openCardId && <CardModal key={openCardId} cardId={openCardId} board={data} onClose={() => openCard(null)} onOpenCard={(id) => openCard(id)} />}

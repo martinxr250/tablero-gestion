@@ -4,6 +4,7 @@ import { AuthArtwork } from "@/components/ui/auth-artwork";
 import { Logo } from "@/components/ui/logo";
 import { BRAND_NAME } from "@/lib/brand";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
+import { PageTransition } from "@/components/shell/page-transition";
 
 function AuthBrand({ className = "" }: { className?: string }) {
   return <div className={`auth-brand ${className}`}><Logo className="auth-brand-icon" /><div><span className="auth-brand-name">{BRAND_NAME}</span></div></div>;
@@ -26,7 +27,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </section>
         <section className="auth-glass-card" aria-label="Acceso a Tableros">
           <AuthBrand className="auth-card-brand" />
-          {children}
+          <PageTransition>{children}</PageTransition>
         </section>
       </div>
     </main>

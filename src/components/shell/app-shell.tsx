@@ -1,6 +1,8 @@
 "use client";
 
 import { BRAND_NAME } from "@/lib/brand";
+import { usePrefetchBoard } from "@/lib/prefetch";
+import { PageTransition } from "./page-transition";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -137,7 +139,7 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
           </div>
         </header>
         <main id="main" className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
@@ -170,6 +172,7 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
   const pathname = usePathname();
   const router = useRouter();
   const qc = useQueryClient();
+  const prefetchBoard = usePrefetchBoard();
   const { data: tree } = useQuery({
     queryKey: ["workspaces", orgId],
     queryFn: () => api<WorkspaceTree>(`/orgs/${orgId}/workspaces`),
@@ -216,6 +219,8 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
             <li key={b.id}>
               <Link
                 href={`/b/${b.id}`}
+                onMouseEnter={() => prefetchBoard(b.id)}
+                onFocus={() => prefetchBoard(b.id)}
                 title={b.name}
                 aria-label={b.name}
                 className={cn(
@@ -269,6 +274,8 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
                       <li key={b.id}>
                         <Link
                           href={`/b/${b.id}`}
+                          onMouseEnter={() => prefetchBoard(b.id)}
+                          onFocus={() => prefetchBoard(b.id)}
                           className={cn(
                             "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                             pathname === `/b/${b.id}` && "bg-sidebar-accent font-semibold text-sidebar-accent-foreground",

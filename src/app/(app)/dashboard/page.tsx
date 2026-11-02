@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, CalendarDays, CheckCircle2, Flame, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { usePrefetchBoard } from "@/lib/prefetch";
 import { useState, type ReactNode } from "react";
 import { useOrg } from "@/components/shell/org-context";
 import { Button, EmptyState, ErrorState, Skeleton } from "@/components/ui/primitives";
@@ -45,6 +46,7 @@ function InfoChip({ icon: Icon, label, value }: { icon: typeof CalendarDays; lab
 
 export default function DashboardPage() {
   const { me, orgId, currentOrg } = useOrg();
+  const prefetchBoard = usePrefetchBoard();
   const [slide, setSlide] = useState(0);
   const [tab, setTab] = useState<"mine" | "overdue" | "soon">("mine");
   // Momento de referencia fijo durante el render (los filtros por fecha no cambian entre renders).
@@ -140,6 +142,7 @@ export default function DashboardPage() {
           <Link
             key={b.id}
             href={`/b/${b.id}`}
+            onMouseEnter={() => prefetchBoard(b.id)}
             className="group min-w-24"
             style={{ flexGrow: Math.max(b.openCards / Math.max(boardTotal, 1), 0.12), flexBasis: 0 }}
           >
