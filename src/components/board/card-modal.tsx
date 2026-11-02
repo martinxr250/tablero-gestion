@@ -19,6 +19,7 @@ import { asColor, CHIP, PRIORITY, type ColorName } from "@/lib/colors";
 import { ago, dueState, fmtDateTime, toLocalInput } from "@/lib/format";
 import type { Activity, BoardData, BoardRole, CardDetail, Comment } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { DevPanel } from "./dev-panel";
 import { RichEditor } from "./rich-editor";
 
 const RELATION_LABEL: Record<string, { out: string; in: string }> = {
@@ -70,6 +71,7 @@ export function CardModal({ cardId, board, onClose }: { cardId: string; board: B
             <Checklists card={card} canEdit={canEdit} refresh={refresh} />
             <Attachments card={card} canEdit={canEdit} refresh={refresh} />
             <Relations card={card} canEdit={canEdit} refresh={refresh} />
+            <DevPanel cardId={card.id} boardId={board.board.id} canEdit={canEdit} />
             <Comments cardId={card.id} board={board} canComment={canComment} canModerate={q.data?.role === "admin"} />
           </div>
           <Sidebar card={card} board={board} canEdit={canEdit} patch={(b) => patch.mutate(b)} refresh={refresh} onClose={onClose} />

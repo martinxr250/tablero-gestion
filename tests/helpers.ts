@@ -18,7 +18,7 @@ export class Client {
   id = "";
   name = "";
 
-  async req<T = any>(method: string, p: string, body?: unknown, opts: { origin?: string | null; form?: FormData; headers?: Record<string, string> } = {}): Promise<Res<T>> {
+  async req<T = any>(method: string, p: string, body?: unknown, opts: { origin?: string | null; form?: FormData; headers?: Record<string, string>; rawBody?: string } = {}): Promise<Res<T>> {
     const headers = new Headers(opts.headers);
     if (opts.origin !== null) headers.set("origin", opts.origin ?? BASE);
     headers.set("x-real-ip", this.ip);
@@ -31,6 +31,8 @@ export class Client {
       headers.set("content-type", r.headers.get("content-type")!);
       headers.set("content-length", String(buf.byteLength));
       payload = buf;
+    } else if (opts.rawBody !== undefined) {
+      payload = opts.rawBody;
     } else if (body !== undefined) {
       headers.set("content-type", "application/json");
       payload = JSON.stringify(body);

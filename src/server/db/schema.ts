@@ -332,3 +332,101 @@ export const myWorkspaces = app.view("my_workspaces", {
   orgId: uuid("org_id").notNull(),
   role: text("role").$type<WorkspaceRole>().notNull(),
 }).existing();
+
+// ───────────── Integración con proveedores de código ─────────────
+
+export type VcsProvider = "github" | "gitlab";
+
+export type BoardRepoSettings = {
+  /** Lista a la que llegan los issues nuevos importados. */
+  inboxListId?: string;
+  /** Lista que equivale a "terminado": mover ahí cierra el issue. */
+  doneListId?: string;
+  /** Si el issue se cierra en el proveedor: mover a revisión (no completa la tarjeta). */
+  reviewListId?: string;
+  /** Crear tarjetas automáticamente para issues nuevos del repo. */
+  importNew?: boolean;
+  /** Enviar al proveedor los cambios de las tarjetas vinculadas. */
+  autoPush?: boolean;
+};
+
+export const vcsConnections = app.table("vcs_connections", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  provider: text("provider").$type<VcsProvider>().notNull(),
+  apiBaseUrl: text("api_base_url").notNull(),
+  tokenEnc: text("token_enc").notNull(),
+  accountLogin: text("account_login").notNull(),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const boardRepos = app.table("board_repos", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  connectionId: uuid("connection_id").notNull(),
+  provider: text("provider").$type<VcsProvider>().notNull(),
+  repoFullName: text("repo_full_name").notNull(),
+  repoId: bigint("repo_id", { mode: "number" }).notNull(),
+  htmlUrl: text("html_url").notNull(),
+  webhookId: bigint("webhook_id", { mode: "number" }),
+  webhookSecretEnc: text("webhook_secret_enc"),
+  settings: jsonb("settings").$type<BoardRepoSettings>().notNull(),
+  lastSyncedAt: ts("last_synced_at"),
+  lastSyncError: text("last_sync_error"),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const cardIssueLinks = app.table("card_issue_links", {
+  cardId: uuid("card_id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardRepoId: uuid("board_repo_id").notNull(),
+  issueNumber: integer("issue_number").notNull(),
+  issueId: bigint("issue_id", { mode: "number" }).notNull(),
+  htmlUrl: text("html_url").notNull(),
+  remoteState: text("remote_state").$type<"open" | "closed">().notNull(),
+  remoteUpdatedAt: ts("remote_updated_at"),
+  syncedHash: text("synced_hash"),
+  syncedAt: ts("synced_at"),
+  pendingPush: boolean("pending_push").notNull().default(false),
+  lastError: text("last_error"),
+  conflict: jsonb("conflict").$type<Record<string, unknown> | null>(),
+});
+
+export const cardDevRefs = app.table("card_dev_refs", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  cardId: uuid("card_id").notNull(),
+  kind: text("kind").$type<"pr" | "branch" | "commit">().notNull(),
+  externalId: text("external_id").notNull(),
+  title: text("title").notNull(),
+  state: text("state").notNull(),
+  url: text("url").notNull(),
+  author: text("author"),
+  branch: text("branch"),
+  merged: boolean("merged").notNull().default(false),
+  draft: boolean("draft").notNull().default(false),
+  checksStatus: text("checks_status"),
+  reviewStatus: text("review_status"),
+  remoteUpdatedAt: ts("remote_updated_at"),
+});
+
+export const vcsUserLinks = app.table(
+  "vcs_user_links",
+  {
+    orgId: uuid("org_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    provider: text("provider").$type<VcsProvider>().notNull(),
+    login: text("login").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.userId, t.provider] })],
+);
+
+export const webhookDeliveries = app.table("webhook_deliveries", {
+  deliveryId: text("delivery_id").primaryKey(),
+  boardRepoId: uuid("board_repo_id").notNull(),
+  event: text("event").notNull(),
+  receivedAt: ts("received_at").notNull().defaultNow(),
+});

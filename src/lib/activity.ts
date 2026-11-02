@@ -44,6 +44,8 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "comment.deleted": return `eliminó un comentario en "${t}"`;
     case "attachment.added": return `adjuntó ${s(d.file)} en "${t}"`;
     case "attachment.removed": return `quitó ${s(d.file)} de "${t}"`;
+    case "vcs.issue_created": return `creó el issue #${String(d.number ?? "")} para "${t}"`;
+    case "vcs.issue_synced": return `sincronizó "${t}" con el issue #${String(d.number ?? "")}`;
     default: return "hizo un cambio";
   }
 }

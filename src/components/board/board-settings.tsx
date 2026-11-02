@@ -15,6 +15,7 @@ import { Badge, Button, Field, Input, Select, Textarea } from "@/components/ui/p
 import { api } from "@/lib/api";
 import { asColor, CHIP, type ColorName } from "@/lib/colors";
 import type { BoardData } from "@/lib/types";
+import { RepoSettings } from "./repo-settings";
 
 export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClose: () => void }) {
   const [tab, setTab] = useState("general");
@@ -27,6 +28,7 @@ export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClos
           { value: "general", label: "General" },
           { value: "members", label: "Miembros" },
           { value: "labels", label: "Etiquetas" },
+          { value: "github", label: "GitHub" },
         ]}
       >
         <TabPanel value="general">
@@ -37,6 +39,9 @@ export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClos
         </TabPanel>
         <TabPanel value="labels">
           <Labels data={data} />
+        </TabPanel>
+        <TabPanel value="github">
+          <RepoSettings data={data} />
         </TabPanel>
       </Tabs>
     </Dialog>
