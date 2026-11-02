@@ -399,7 +399,7 @@ export function BoardView({ boardId }: { boardId: string }) {
           {view === "list" && <ListView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
           {view === "calendar" && <CalendarView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
           {view === "sprints" && <SprintsView data={data} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
-          {view === "insights" && <InsightsView boardId={data.board.id} onOpenCard={(id) => openCard(id)} />}
+          {view === "insights" && <InsightsView boardId={data.board.id} canManage={data.role === "admin"} onOpenCard={(id) => openCard(id)} />}
         </div>
       </ViewTransition>
       <BulkDialog data={data} open={panel === "bulk"} onOpenChange={(o) => setPanel(o ? "bulk" : null)} />

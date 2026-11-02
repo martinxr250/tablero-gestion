@@ -1,13 +1,12 @@
 import "./auth.css";
 import type { ReactNode } from "react";
 import { AuthArtwork } from "@/components/ui/auth-artwork";
-import { Logo } from "@/components/ui/logo";
-import { BRAND_NAME } from "@/lib/brand";
+import { BrandWordmark } from "@/components/ui/logo";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { PageTransition } from "@/components/shell/page-transition";
 
 function AuthBrand({ className = "" }: { className?: string }) {
-  return <div className={`auth-brand ${className}`}><Logo className="auth-brand-icon" /><div><span className="auth-brand-name">{BRAND_NAME}</span></div></div>;
+  return <div className={`auth-brand ${className}`}><BrandWordmark className="auth-wordmark" /></div>;
 }
 
 export default function AuthLayout({ children }: { children: ReactNode }) {

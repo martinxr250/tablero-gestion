@@ -47,6 +47,9 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "card.recurred": return `programó la próxima "${t}"`;
     case "card.duplicated": return `duplicó "${t}"`;
     case "card.subtask_created": return `agregó la subtarea "${t}" a "${s(d.parent)}"`;
+    case "card.completion_blocked": return `intentó completar "${t}" con condiciones pendientes`;
+    case "vcs.issue_linked": return `vinculó "${t}" con el issue #${s(d.number)}`;
+    case "vcs.pull_linked": return `vinculó el PR #${s(d.number)} a "${t}"`;
     case "card.mirrored": return `espejó "${t}" en ${s(d.to)}`;
     case "card.mirror_added": return "agregó una tarjeta espejo";
     case "card.mirror_moved": return `movió una tarjeta espejo a ${s(d.to)}`;
@@ -86,6 +89,11 @@ export function describeNotification(n: Notification): string {
     case "card.completed": return `completó "${card}"`;
     case "qa.approved": return `aprobó "${card}" en control de calidad`;
     case "qa.rejected": return `rechazó "${card}": ${s(d.note)}`;
+    case "card.blocked": return `"${card}" quedó bloqueada: depende de "${s(d.blocker)}"`;
+    case "dependency.resolved": return `"${card}" ya no está bloqueada: terminó "${s(d.blocker)}"`;
+    case "pr.review_requested": return `te pidieron revisar el PR #${s(d.number)} de "${card}"`;
+    case "ci.failed": return `fallaron los checks del PR #${s(d.number)} de "${card}"`;
+    case "sprint.risk": return `la etapa "${s(d.sprintName)}" corre riesgo ${s(d.level) === "high" ? "alto" : "medio"} de retraso`;
     default: return "nueva actividad";
   }
 }

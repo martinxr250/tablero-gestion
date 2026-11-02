@@ -87,6 +87,7 @@ export type BoardData = {
     qaListId: string | null;
     doneListId: string | null;
     isTemplate: boolean;
+    completionRules: Partial<Record<"subtasks" | "dependencies" | "checklists" | "prApproved" | "ciPassing" | "prMerged", "off" | "warn" | "block">>;
   };
   role: BoardRole;
   canReview: boolean;

@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin
 export const metadata: Metadata = {
   title: { default: BRAND_NAME, template: `%s · ${BRAND_NAME}` },
   description: "Organizá proyectos, tareas y equipos con tableros Kanban.",
-  icons: { icon: "/icon.svg", apple: "/assets/brand/apple-touch-icon.png" },
+  icons: { icon: "/icon.svg?v=pliegue-1", apple: "/assets/brand/apple-touch-icon.png?v=pliegue-1" },
 };
 
 export const viewport: Viewport = {

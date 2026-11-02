@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Bell, BellOff, CheckCircle2, Copy, Layers, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
+import { AlertTriangle, Ban, Bell, BellOff, CheckCircle2, Copy, Layers, ListChecks, XCircle, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -389,5 +389,37 @@ export function MirrorControls({ card, board }: { card: CardDetail; board: Board
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+type RuleResult = { key: string; label: string; level: "warn" | "block"; ok: boolean; detail: string };
+
+/** Condiciones del tablero para completar la tarjeta (las valida el servidor al cerrarla). */
+export function CompletionPanel({ card }: { card: CardDetail }) {
+  const q = useQuery({
+    queryKey: ["completion", card.id, card.updatedAt, card.qa.status, card.subtasks.length],
+    queryFn: () => api<{ results: RuleResult[]; canComplete: boolean }>(`/cards/${card.id}/completion`),
+  });
+  if (!q.data || q.data.results.length === 0 || card.completedAt) return null;
+  const { results, canComplete } = q.data;
+  return (
+    <section className="rounded-2xl border p-4" aria-label="Condiciones para terminar">
+      <div className="mb-2 flex items-center gap-2">
+        <ListChecks className="size-4 text-muted-foreground" />
+        <h3 className="flex-1 text-sm font-semibold">Para terminar</h3>
+        <span className={cn("text-xs font-medium", canComplete ? "text-success" : "text-destructive")}>{canComplete ? "Se puede completar" : "Faltan condiciones"}</span>
+      </div>
+      <ul className="space-y-1.5 text-sm">
+        {results.map((r) => (
+          <li key={r.key} className="flex items-start gap-2">
+            {r.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /> : r.level === "block" ? <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" /> : <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />}
+            <span>
+              {r.label}
+              {!r.ok && <span className="block text-xs text-muted-foreground">{r.detail}{r.level === "warn" ? " · solo informa, no bloquea" : ""}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

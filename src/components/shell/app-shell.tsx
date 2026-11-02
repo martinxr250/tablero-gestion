@@ -13,7 +13,7 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Logo } from "@/components/ui/logo";
+import { BrandWordmark, Logo } from "@/components/ui/logo";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/overlay";
 import { Button } from "@/components/ui/primitives";
 import { Avatar } from "@/components/ui/user-avatar";
@@ -191,9 +191,9 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
     <div className="flex h-full flex-col">
       <div className={cn("flex items-center justify-between gap-2 px-5 pt-5 pb-4", mini && "md:flex-col md:px-0")}>
         <Link href="/dashboard" className="flex items-center gap-2.5" aria-label={`${BRAND_NAME}, inicio`}>
-          <Logo className="size-9 shrink-0" />
+          {mini && <Logo className="hidden size-9 shrink-0 md:block" />}
           <span className={cn("leading-tight", mini && "md:hidden")}>
-            <span className="block text-lg font-bold tracking-tight text-foreground">{BRAND_NAME}</span>
+            <BrandWordmark className="h-10 w-auto text-foreground" />
             <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
           </span>
         </Link>

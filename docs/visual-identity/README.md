@@ -1,6 +1,6 @@
 # Tableros · recursos visuales e integración
 
-El nombre vigente es **Tableros** y el símbolo activo conserva las tres columnas Kanban. Se mantiene la paleta violeta/lavanda y Plus Jakarta Sans. La propuesta de nombre alternativa quedó archivada y no se usa en la aplicación.
+El nombre vigente es **Tableros** y el símbolo activo es una T de cinta plegada. Se mantiene la paleta violeta/lavanda y Plus Jakarta Sans. La propuesta de nombre alternativa quedó archivada y no se usa en la aplicación.
 
 ## Entregables
 
@@ -11,7 +11,7 @@ El nombre vigente es **Tableros** y el símbolo activo conserva las tres columna
 | Símbolos de proyecto | 8 SVG | `project-icons/`; se asignan de forma estable a cada tablero, conservando su color |
 | Patrones geométricos | 5 SVG | `patterns/`; detalles tenues en las tarjetas y fondos |
 | Ilustraciones vectoriales | 8 SVG | `illustrations/`; familia original con volumen geométrico |
-| Marca | Claro, oscuro, monocromo, favicon e íconos PNG | `brand/`; nombre Tableros y símbolo de tres columnas |
+| Marca | Claro, oscuro, monocromo, favicon e íconos PNG | `brand/`; nombre Tableros con la T plegada como inicial, seguida por «ableros», sin unir los trazos |
 | Catálogo | HTML local con selector de tema sin JavaScript | `public/assets/catalog.html`, disponible en `/assets/catalog.html` |
 
 Los 8 renders ampliados representan proyectos, colaboración, integraciones, asistente, actividad, notificaciones, búsqueda y seguridad. Se suman las tarjetas flotantes iniciales y las dos composiciones de acceso/registro. Los dos renders de autenticación conservan 1254 × 1254 px y calidad WebP 96 para evitar la pérdida de detalle al mostrarlos en pantallas densas; se sirven mediante next/image sin otra conversión con pérdida. Las variantes antiguas reducidas se mantienen como entregables de la primera etapa.
@@ -45,3 +45,7 @@ Por pedido del usuario, se agregó repetición y una política mínima de 8 cara
 - No se hizo un recorrido autenticado completo por las vistas privadas. Sus componentes se revisaron en una composición temporal de la primera etapa, luego retirada.
 
 Los cambios concurrentes de backend e integraciones se conservaron. Los prompts del generador están en `generation-prompt.md`, `expanded-prompts.md`, `login-prompt.md` y `register-prompt.md`.
+
+## Marca Pliegue
+
+La propuesta aprobada reemplaza las columnas del símbolo anterior por una T de cinta plegada. El logotipo completo usa ese símbolo como primera letra: no agrega otra T delante de «ableros». La T y la a están separadas. Se actualizaron SVG claros/oscuros/monocromos, favicon, íconos y los renders de acceso y registro. Las copias anteriores están en `public/assets/brand/legacy-columns/`; el concepto, la aprobación y sus prompts están en `public/assets/brand/proposals/pliegue/`.

@@ -7,6 +7,7 @@ import { uuidv7 } from "../core/ids";
 import { withUser } from "../db/client";
 import { cards, inboxItems, lists } from "../db/schema";
 import { boardAccess } from "./access";
+import { deliveryStatus } from "./delivery";
 import { positionAfter } from "./positions";
 import { logActivity } from "./shared";
 
@@ -24,6 +25,12 @@ type WorkRow = {
   is_owner: boolean;
   blocked: boolean;
   qa_status: string;
+  sprint_name: string | null;
+  prs_open: number;
+  prs_merged: number;
+  has_branch: boolean;
+  review_pending: boolean;
+  checks_failed: boolean;
 };
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (aaaa-mm-dd)");
@@ -41,7 +48,10 @@ export const workRoutes = [
         const rows = await tx.execute<WorkRow>(sql`
           select c.id, c.title, c.priority, c.due_at, c.completed_at, c.qa_status,
             b.id as board_id, b.name as board_name, b.color as board_color, o.name as org_name, l.name as list_name,
-            (c.owner_id = ${me.id}) as is_owner,
+            (c.owner_id = ${me.id}) as is_owner, sp.name as sprint_name,
+            coalesce(dr.prs_open, 0)::int as prs_open, coalesce(dr.prs_merged, 0)::int as prs_merged,
+            coalesce(dr.has_branch, false) as has_branch, coalesce(dr.review_pending, false) as review_pending,
+            coalesce(dr.checks_failed, false) as checks_failed,
             exists (
               select 1 from app.card_relations r join app.cards x on x.id = r.from_card_id
               where r.to_card_id = c.id and r.type = 'blocks' and x.completed_at is null and x.archived_at is null
@@ -51,6 +61,15 @@ export const workRoutes = [
           join app.boards b on b.id = c.board_id
           join app.organizations o on o.id = c.org_id
           join app.lists l on l.id = c.list_id
+          left join app.sprints sp on sp.id = c.sprint_id
+          left join lateral (
+            select count(*) filter (where d.kind = 'pr' and d.state = 'open') as prs_open,
+              count(*) filter (where d.kind = 'pr' and d.merged) as prs_merged,
+              bool_or(d.kind = 'branch') as has_branch,
+              bool_or(d.kind = 'pr' and d.state = 'open' and not d.draft and coalesce(d.review_status, '') <> 'approved') as review_pending,
+              bool_or(d.kind = 'pr' and d.checks_status = 'failure' and not d.merged) as checks_failed
+            from app.card_dev_refs d where d.card_id = c.id
+          ) dr on true
           where c.archived_at is null and b.archived_at is null
             and (c.owner_id = ${me.id} or exists (select 1 from app.card_assignees a where a.card_id = c.id and a.user_id = ${me.id}))
             and ${query.completed === "week" ? sql`(c.completed_at is null or c.completed_at > now() - interval '7 days')` : sql`c.completed_at is null`}
@@ -67,6 +86,18 @@ export const workRoutes = [
             blocked: r.blocked,
             isOwner: r.is_owner,
             listName: r.list_name,
+            sprintName: r.sprint_name,
+            reviewPending: r.review_pending || r.qa_status === "pending",
+            checksFailed: r.checks_failed,
+            delivery: deliveryStatus({
+              completed: !!r.completed_at,
+              blocked: r.blocked,
+              qaStatus: r.qa_status,
+              prsOpen: r.prs_open,
+              prsMerged: r.prs_merged,
+              hasBranch: r.has_branch,
+              reviewPending: r.review_pending,
+            }),
             board: { id: r.board_id, name: r.board_name, color: r.board_color, orgName: r.org_name },
           })),
         };

@@ -20,7 +20,7 @@ import { ago, dueState, fmtDateTime, toLocalInput } from "@/lib/format";
 import type { Activity, BoardData, BoardRole, CardDetail, Comment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardFields } from "./card-fields";
-import { CardBanners, PlanningSidebar, QaPanel, Subtasks } from "./card-planning";
+import { CardBanners, CompletionPanel, PlanningSidebar, QaPanel, Subtasks } from "./card-planning";
 import { DevPanel } from "./dev-panel";
 import { RichEditor } from "./rich-editor";
 
@@ -86,6 +86,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
             <CardBanners card={card} onOpenCard={onOpenCard} />
             <MetaRow card={card} board={board} />
             <QaPanel card={card} board={board} canEdit={canEdit} refresh={refresh} />
+            <CompletionPanel card={card} />
             <CardFields card={card} board={board} canEdit={canEdit} refresh={refresh} />
             <Description card={card} canEdit={canEdit} onSave={(description) => patch.mutateAsync({ description, expectedUpdatedAt: card.updatedAt })} />
             <Subtasks card={card} board={board} canEdit={canEdit} refresh={refresh} onOpenCard={onOpenCard} />

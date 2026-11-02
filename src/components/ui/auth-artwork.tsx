@@ -12,7 +12,7 @@ const artByRoute: Record<string, ArtworkKind> = {
 
 export function AuthArtwork() {
   const pathname = usePathname();
-  const source = pathname === "/register" ? "/assets/3d/tableros-register-hd.webp" : artByRoute[pathname] ? `/assets/3d/${artByRoute[pathname]}.webp` : "/assets/3d/tableros-login-hd.webp";
+  const source = pathname === "/register" ? "/assets/3d/tableros-register-pliegue.webp" : artByRoute[pathname] ? `/assets/3d/${artByRoute[pathname]}.webp` : "/assets/3d/tableros-login-pliegue.webp";
   // Keep the original render's detail instead of applying a second lossy conversion.
   return <div aria-hidden className="auth-visual"><div className="auth-visual-halo" /><Image src={source} alt="" width={1254} height={1254} unoptimized className="auth-visual-object" /></div>;
 }

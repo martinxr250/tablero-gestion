@@ -5,6 +5,8 @@ import { logger } from "../core/logger";
 import { withSystem } from "../db/client";
 import { storage } from "../storage/storage";
 import { syncRepo } from "../integrations/sync";
+import { notify } from "./shared";
+import { sprintRisk } from "./signals";
 
 /**
  * Tareas diarias (Vercel Cron, autenticadas con CRON_SECRET):
@@ -47,6 +49,32 @@ export async function runDailyJobs() {
 
     await tx.execute(sql`select set_config('app.audit_purge', 'on', true)`);
     report.auditLogs = (await tx.execute(sql`delete from app.audit_logs where created_at < now() - interval '365 days'`)).count;
+  });
+
+  // Etapas en curso con riesgo medio o alto: avisa a quienes administran el tablero (una vez por nivel).
+  report.sprintRiskNotifications = await withSystem(async (tx) => {
+    const boards = await tx.execute<{ board_id: string; org_id: string; name: string }>(sql`
+      select distinct s.board_id, b.org_id, b.name from app.sprints s join app.boards b on b.id = s.board_id
+      where s.status = 'active' and b.archived_at is null`);
+    let sent = 0;
+    for (const b of boards) {
+      const risky = (await sprintRisk(tx, b.board_id)).filter((s) => s.status === "active" && (s.level === "high" || s.level === "medium"));
+      if (risky.length === 0) continue;
+      const admins = (await tx.execute<{ user_id: string }>(sql`select user_id from app.board_roles(${b.board_id}) where role = 'admin'`)).map((r) => r.user_id);
+      for (const s of risky) {
+        await notify(tx, {
+          orgId: b.org_id,
+          userIds: admins,
+          actorId: null,
+          type: "sprint.risk",
+          boardId: b.board_id,
+          data: { sprintName: s.name, level: s.level, boardName: b.name, reasons: s.reasons },
+          dedupeKey: `risk:${s.id}:${s.level}`,
+        });
+        sent++;
+      }
+    }
+    return sent;
   });
 
   // Sincronización diaria de respaldo para repos sin webhook (por ejemplo, en desarrollo local).

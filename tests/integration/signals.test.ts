@@ -91,6 +91,14 @@ describe("dependencias, riesgo, capacidad y avisos", () => {
     expect(body.summary.sprintsAtRisk).toBeGreaterThanOrEqual(1);
   });
 
+  it("la tarea diaria avisa una sola vez a los administradores cuando una etapa corre riesgo", async () => {
+    const cron = () => new Client().req("GET", "/cron/daily", undefined, { origin: null, headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    expect((await cron()).status).toBe(200);
+    expect((await cron()).status).toBe(200);
+    const risk = (await notes(lead)).filter((n) => n.type === "sprint.risk");
+    expect(risk).toHaveLength(1);
+  });
+
   it("capacidad por persona: solo administradores, y detecta sobrecarga separando lo no estimado", async () => {
     expect((await dev.put(`/boards/${s.boardId}/capacity/${dev.id}`, { points: 5 })).status).toBe(403);
     const outsider = await newUser("Externo");

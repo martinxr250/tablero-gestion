@@ -259,3 +259,8 @@
 .dark .auth-page a.text-primary { color: var(--primary); }
 .dark .auth-corner { display: none; }
 .dark .auth-theme-switch { border-color: var(--border); background: var(--card); }
+
+/* El símbolo es la T inicial; la palabra continúa con «ableros», sin una segunda T. */
+.auth-wordmark { display: block; width: auto; height: 53px; max-width: 100%; color: var(--auth-ink); }
+@media (max-width: 1023px) { .auth-wordmark { height: 43px; } }
+@media (max-height: 760px) { .auth-wordmark { height: 38px; } }

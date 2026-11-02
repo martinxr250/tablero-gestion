@@ -2,8 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CircleCheck, CircleDot, CircleX, Clock, ExternalLink, GitMerge, GitPullRequest, Link2Off, Loader } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Badge, Button } from "@/components/ui/primitives";
+import { Badge, Button, Input } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,10 @@ type Dev = {
     error: string | null;
     conflict: { remote: { title: string; body: string; state: string; labels: string[] }; detectedAt: string } | null;
   } | null;
-  pulls: { number: number; title: string; state: string; url: string; author: string | null; branch: string | null; draft: boolean; checks: string | null; review: string | null; updatedAt: string | null }[];
+  pulls: {
+    number: number; title: string; state: string; url: string; author: string | null; branch: string | null; draft: boolean;
+    checks: string | null; review: string | null; merged: boolean; manual: boolean; updatedAt: string | null;
+  }[];
 };
 
 const CHECKS: Record<string, { label: string; icon: typeof CircleCheck; cls: string }> = {
@@ -49,6 +53,19 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
     onSettled: refresh,
   });
   const unlink = useMutation({ mutationFn: () => api(`/cards/${cardId}/issue`, { method: "DELETE" }), onSettled: refresh });
+  const linkIssue = useMutation({
+    mutationFn: (number: number) => api<{ number: number }>(`/cards/${cardId}/issue/link`, { method: "POST", body: { number } }),
+    onSuccess: (r) => toast.success(`Vinculada al issue #${r.number}`),
+    onSettled: refresh,
+  });
+  const linkPull = useMutation({
+    mutationFn: (number: number) => api(`/cards/${cardId}/dev/pulls`, { method: "POST", body: { number } }),
+    onSuccess: () => toast.success("Pull request vinculado"),
+    onSettled: refresh,
+  });
+  const unlinkPull = useMutation({ mutationFn: (number: number) => api(`/cards/${cardId}/dev/pulls/${number}`, { method: "DELETE" }), onSettled: refresh });
+  const [issueNumber, setIssueNumber] = useState("");
+  const [pullNumber, setPullNumber] = useState("");
 
   const data = q.data;
   if (!data?.repo) return null;
@@ -62,12 +79,24 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
         <span className="text-xs text-muted-foreground">{data.repo.fullName}</span>
       </div>
       {!issue ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed px-3 py-3 text-sm">
-          <span className="text-muted-foreground">Esta tarjeta no tiene issue.</span>
+        <div className="space-y-2 rounded-xl border border-dashed px-3 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-muted-foreground">Esta tarjeta no tiene issue.</span>
+            {canEdit && (
+              <Button size="sm" variant="soft" loading={create.isPending} onClick={() => create.mutate()}>
+                <CircleDot /> Crear issue en GitHub
+              </Button>
+            )}
+          </div>
           {canEdit && (
-            <Button size="sm" variant="soft" loading={create.isPending} onClick={() => create.mutate()}>
-              <CircleDot /> Crear issue en GitHub
-            </Button>
+            <NumberForm
+              label="Vincular un issue existente"
+              placeholder="N.º de issue"
+              value={issueNumber}
+              onChange={setIssueNumber}
+              loading={linkIssue.isPending}
+              onSubmit={(n) => linkIssue.mutate(n, { onSuccess: () => setIssueNumber("") })}
+            />
           )}
         </div>
       ) : (
@@ -123,14 +152,21 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                       #{p.number} {p.title}
                     </a>
                     {p.draft && <Badge className="bg-card text-muted-foreground">Borrador</Badge>}
+                    {p.manual && <Badge className="bg-card text-muted-foreground">Vinculado a mano</Badge>}
                     {p.review && <Badge className="bg-card">{REVIEW[p.review] ?? p.review}</Badge>}
                     {checks && (
                       <span className={cn("inline-flex items-center gap-1 text-xs font-medium", checks.cls)}>
                         <checks.icon className="size-3.5" /> {checks.label}
                       </span>
                     )}
+                    {canEdit && p.manual && (
+                      <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular PR #${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
+                        <Link2Off className="size-3.5" />
+                      </button>
+                    )}
                     <span className="w-full text-xs text-muted-foreground">
-                      {p.state === "merged" ? "Fusionado" : p.state === "open" ? "Abierto" : "Cerrado"} · {p.branch} {p.author && `· ${p.author}`} {p.updatedAt && `· ${ago(p.updatedAt)}`}
+                      {p.merged ? "Fusionado (no implica desplegado)" : p.state === "open" ? (p.review === "approved" ? "Abierto · aprobado, sin fusionar" : "Abierto") : "Cerrado sin fusionar"} · {p.branch}{" "}
+                      {p.author && `· ${p.author}`} {p.updatedAt && `· ${ago(p.updatedAt)}`}
                     </span>
                   </li>
                 );
@@ -140,6 +176,50 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
           {data.pulls.length === 0 && <p className="text-xs text-muted-foreground">Los PRs que mencionen #{issue.number} (en el título, la descripción o la rama) aparecen acá.</p>}
         </div>
       )}
+      {!issue && data.pulls.length > 0 && (
+        <ul className="mt-2 space-y-1.5">
+          {data.pulls.map((p) => (
+            <li key={p.number} className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+              {p.merged ? <GitMerge className="size-4 text-violet-500" /> : <GitPullRequest className="size-4 text-success" />}
+              <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium hover:text-primary">
+                #{p.number} {p.title}
+              </a>
+              {p.review && <Badge className="bg-card">{REVIEW[p.review] ?? p.review}</Badge>}
+              {p.checks && CHECKS[p.checks] && <span className={cn("text-xs font-medium", CHECKS[p.checks]!.cls)}>{CHECKS[p.checks]!.label}</span>}
+              {canEdit && (
+                <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular PR #${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
+                  <Link2Off className="size-3.5" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canEdit && (
+        <div className="mt-2">
+          <NumberForm label="Vincular un pull request" placeholder="N.º de PR" value={pullNumber} onChange={setPullNumber} loading={linkPull.isPending} onSubmit={(n) => linkPull.mutate(n, { onSuccess: () => setPullNumber("") })} />
+        </div>
+      )}
     </section>
+  );
+}
+
+function NumberForm({ label, placeholder, value, onChange, loading, onSubmit }: { label: string; placeholder: string; value: string; onChange: (v: string) => void; loading: boolean; onSubmit: (n: number) => void }) {
+  const n = Number(value);
+  const valid = Number.isInteger(n) && n > 0 && n < 10_000_000;
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        if (valid) onSubmit(n);
+      }}
+    >
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <Input className="h-8 w-28" inputMode="numeric" aria-label={label} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 7))} />
+      <Button type="submit" size="sm" variant="secondary" loading={loading} disabled={!valid}>
+        Vincular
+      </Button>
+    </form>
   );
 }

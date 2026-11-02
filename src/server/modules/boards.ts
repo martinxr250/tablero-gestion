@@ -213,6 +213,7 @@ export const boardRoutes = [
             qaListId: board.qaListId,
             doneListId: board.doneListId,
             isTemplate: board.isTemplate,
+            completionRules: board.completionRules,
           },
           role,
           canReview: role === "admin" || !!meRow?.can_review,

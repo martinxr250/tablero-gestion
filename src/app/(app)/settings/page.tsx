@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useOrg } from "@/components/shell/org-context";
 import { Avatar } from "@/components/ui/user-avatar";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
-import { Alert, Button, Card, Field, Input, PageHeader } from "@/components/ui/primitives";
+import { Alert, Button, Card, Field, Input, PageHeader, Skeleton } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { ago, fmtDateTime } from "@/lib/format";
 
@@ -23,6 +23,7 @@ export default function SettingsPage() {
         tabs={[
           { value: "profile", label: "Perfil" },
           { value: "security", label: "Seguridad" },
+          { value: "notifications", label: "Avisos" },
           { value: "account", label: "Cuenta" },
         ]}
       >
@@ -33,6 +34,9 @@ export default function SettingsPage() {
           <ChangePassword />
           <Mfa />
           <Sessions />
+        </TabPanel>
+        <TabPanel value="notifications">
+          <NotificationPrefs />
         </TabPanel>
         <TabPanel value="account">
           <DeleteAccount />
@@ -359,6 +363,59 @@ function DeleteAccount() {
       <Button variant="danger" disabled={!password} loading={del.isPending} onClick={() => confirm("Esta acción no se puede deshacer. ¿Continuar?") && del.mutate()}>
         Eliminar cuenta
       </Button>
+    </Card>
+  );
+}
+
+const NOTIF_LABEL: Record<string, string> = {
+  "comment.created": "Comentarios en tarjetas que sigo",
+  "card.moved": "Tarjetas que sigo cambian de lista",
+  "card.completed": "Tarjetas que sigo se completan",
+  "card.due_soon": "Vencimientos próximos",
+  "card.blocked": "Una tarea mía queda bloqueada",
+  "dependency.resolved": "Una tarea mía se desbloquea",
+  "pr.review_requested": "Me piden revisar un pull request",
+  "ci.failed": "Fallan los checks de CI de mis tareas",
+  "qa.requested": "Tareas listas para control de calidad",
+  "sprint.risk": "Etapas con riesgo de retraso",
+};
+
+function NotificationPrefs() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["notification-settings"], queryFn: () => api<{ mutable: string[]; muted: string[] }>("/me/notification-settings") });
+  const save = useMutation({
+    mutationFn: (muted: string[]) => api("/me/notification-settings", { method: "PUT", body: { muted } }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["notification-settings"] }),
+  });
+  if (!q.data) return <Skeleton className="h-64" />;
+  const muted = new Set(q.data.muted);
+  return (
+    <Card className="space-y-4 p-6">
+      <div>
+        <h2 className="text-lg font-semibold">Avisos</h2>
+        <p className="text-sm text-muted-foreground">Elegí qué avisos recibir en la campana. Las asignaciones, menciones y decisiones de control de calidad siempre llegan. No enviamos correos por cada evento.</p>
+      </div>
+      <ul className="divide-y rounded-2xl border">
+        {q.data.mutable.map((type) => (
+          <li key={type}>
+            <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm">
+              {NOTIF_LABEL[type] ?? type}
+              <input
+                type="checkbox"
+                className="size-4 accent-[var(--primary)]"
+                checked={!muted.has(type)}
+                disabled={save.isPending}
+                onChange={(e) => {
+                  const next = new Set(muted);
+                  if (e.target.checked) next.delete(type);
+                  else next.add(type);
+                  save.mutate([...next]);
+                }}
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

@@ -20,7 +20,7 @@ const today = () => new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z
 const days = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / DAY);
 
 /** Riesgo de una etapa: puntos restantes contra días restantes y ritmo (histórico o capacidad). */
-async function sprintRisk(tx: Tx, boardId: string) {
+export async function sprintRisk(tx: Tx, boardId: string) {
   const sprintRows = await tx.execute<{
     id: string; name: string; status: string; starts_on: string; ends_on: string; capacity_points: string | null;
     remaining: string | null; estimated: number; unestimated: number; open: number; blocked: number; overdue: number;
