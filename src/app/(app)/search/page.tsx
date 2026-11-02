@@ -63,7 +63,7 @@ function SearchContent() {
       <Card className="mb-6 space-y-3 p-4">
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input autoFocus className="pl-9" placeholder="Buscar por título o descripción…" aria-label="Buscar" value={text} onChange={(e) => setText(e.target.value)} />
+          <Input autoFocus maxLength={100} className="pl-9" placeholder="Buscar por título o descripción…" aria-label="Buscar" value={text} onChange={(e) => setText(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7">
           <Select aria-label="Organización" value={scopeOrg} onChange={(e) => set("orgId", e.target.value)}>

@@ -69,7 +69,7 @@ export default function RegisterPage() {
         <div>
           <div className="login-input-wrap">
             <label htmlFor="name" className="sr-only">Nombre</label><UserRound aria-hidden className="login-input-icon" />
-            <Input className="login-input" id="name" autoComplete="name" placeholder="Tu nombre" required aria-invalid={!!errors.name} aria-describedby={errors.name ? "name-error" : undefined} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input className="login-input" id="name" autoComplete="name" maxLength={80} placeholder="Tu nombre" required aria-invalid={!!errors.name} aria-describedby={errors.name ? "name-error" : undefined} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           {errors.name && <p id="name-error" className="mt-2 text-xs text-destructive" role="alert">{errors.name}</p>}
         </div>

@@ -266,7 +266,7 @@ function Mfa() {
             <Input id="d-pw" type="password" autoComplete="current-password" value={disable.password} onChange={(e) => setDisable({ ...disable, password: e.target.value })} />
           </Field>
           <Field label="Código o código de recuperación" htmlFor="d-code">
-            <Input id="d-code" autoComplete="one-time-code" value={disable.code} onChange={(e) => setDisable({ ...disable, code: e.target.value })} />
+            <Input id="d-code" autoComplete="one-time-code" maxLength={20} value={disable.code} onChange={(e) => setDisable({ ...disable, code: e.target.value })} />
           </Field>
           <Button type="submit" variant="danger" loading={off.isPending}>
             Desactivar

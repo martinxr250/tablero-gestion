@@ -31,3 +31,14 @@ export function fieldDisplay(field: BoardField, value: FieldValue | undefined): 
       return String(value);
   }
 }
+
+/**
+ * Lee un campo de puntos (0 a max, de a medio punto). Devuelve null si está vacío,
+ * o undefined si no es válido (el campo vuelve al valor anterior).
+ */
+export function parsePoints(raw: string, max = 1000): number | null | undefined {
+  if (raw.trim() === "") return null;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0 || n > max) return undefined;
+  return Math.round(n * 2) / 2;
+}

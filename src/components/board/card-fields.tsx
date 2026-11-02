@@ -33,7 +33,21 @@ function FieldInput({ field, value, disabled, onSave }: { field: BoardField; val
         </Select>
       );
     case "date":
-      return <Input {...common} type="date" defaultValue={typeof value === "string" ? value : ""} key={String(value)} onChange={(e) => onSave(e.target.value || null)} />;
+      // Se guarda al salir del campo: mientras se escribe el año la fecha pasa por valores intermedios.
+      return (
+        <Input
+          {...common}
+          type="date"
+          min="1900-01-01"
+          max="2999-12-31"
+          defaultValue={typeof value === "string" ? value : ""}
+          key={String(value)}
+          onBlur={(e) => {
+            const next = e.target.value || null;
+            if (next !== (value ?? null)) onSave(next);
+          }}
+        />
+      );
     default: {
       const numeric = field.type === "number" || field.type === "currency";
       return (

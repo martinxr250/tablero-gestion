@@ -9,6 +9,7 @@ import { Button, Field, Input, Select, Textarea } from "@/components/ui/primitiv
 import { api } from "@/lib/api";
 import { fmtShort } from "@/lib/format";
 import type { BoardData, CardSummary, Sprint } from "@/lib/types";
+import { parsePoints } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
 type Draft = { id?: string; name: string; goal: string; startsOn: string; endsOn: string; capacityPoints: string };
@@ -83,8 +84,11 @@ export function SprintsView({ data, canEdit, onOpenCard }: { data: BoardData; ca
         defaultValue={c.estimatePoints ?? ""}
         key={`${c.id}-${c.estimatePoints}`}
         onBlur={(e) => {
-          const v = e.target.value === "" ? null : Number(e.target.value);
-          if (v !== c.estimatePoints) estimate.mutate({ cardId: c.id, value: v });
+          const v = parsePoints(e.target.value);
+          if (v === undefined) {
+            toast.error("La estimación va de 0 a 1000 puntos");
+            e.target.value = c.estimatePoints?.toString() ?? "";
+          } else if (v !== c.estimatePoints) estimate.mutate({ cardId: c.id, value: v });
         }}
         className="h-8 w-16 rounded-full border bg-card px-2 text-center text-xs tabular-nums"
       />
@@ -236,11 +240,11 @@ export function SprintsView({ data, canEdit, onOpenCard }: { data: BoardData; ca
                 <Input id="sp-start" type="date" required value={draft.startsOn} onChange={(e) => setDraft({ ...draft, startsOn: e.target.value })} />
               </Field>
               <Field label="Fin" htmlFor="sp-end">
-                <Input id="sp-end" type="date" required value={draft.endsOn} onChange={(e) => setDraft({ ...draft, endsOn: e.target.value })} />
+                <Input id="sp-end" type="date" required min={draft.startsOn} value={draft.endsOn} onChange={(e) => setDraft({ ...draft, endsOn: e.target.value })} />
               </Field>
             </div>
             <Field label="Capacidad del equipo (puntos)" htmlFor="sp-cap" hint="Cuántos puntos puede completar el equipo en esta etapa.">
-              <Input id="sp-cap" type="number" min={0} step={0.5} value={draft.capacityPoints} onChange={(e) => setDraft({ ...draft, capacityPoints: e.target.value })} />
+              <Input id="sp-cap" type="number" min={0} max={10000} step={0.5} value={draft.capacityPoints} onChange={(e) => setDraft({ ...draft, capacityPoints: e.target.value })} />
             </Field>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDraft(null)}>

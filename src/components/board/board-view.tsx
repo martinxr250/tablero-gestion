@@ -422,7 +422,7 @@ function FiltersButton({ data, filters, setFilters }: { data: BoardData; filters
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 space-y-3">
-        <Input className="h-9" placeholder="Buscar por título…" aria-label="Buscar por título" value={filters.text} onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
+        <Input className="h-9" maxLength={100} placeholder="Buscar por título…" aria-label="Buscar por título" value={filters.text} onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
         <Select className="h-9" aria-label="Persona" value={filters.member} onChange={(e) => setFilters({ ...filters, member: e.target.value })}>
           <option value="">Cualquier persona</option>
           {data.people.map((p) => (

@@ -273,6 +273,9 @@ function MemberAccounts({ orgId, canEditOthers }: { orgId: string; canEditOthers
                 name="login"
                 aria-label={`Usuario de GitHub de ${m.name}`}
                 defaultValue={m.login ?? ""}
+                maxLength={39}
+                pattern="[A-Za-z0-9\-]{1,39}"
+                title="Letras, números y guiones (máximo 39)"
                 placeholder="usuario"
                 className="h-9 w-40"
                 disabled={!canEditOthers && m.userId !== me?.user.id}

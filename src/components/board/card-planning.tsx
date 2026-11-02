@@ -11,6 +11,7 @@ import { Button, Input, Select, Textarea } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import type { BoardData, CardDetail, WorkspaceTree } from "@/lib/types";
+import { parsePoints } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
 type Patch = (b: Record<string, unknown>) => void;
@@ -258,8 +259,11 @@ export function PlanningSidebar({ card, board, canEdit, patch, onOpenCard }: { c
             defaultValue={card.estimatePoints ?? ""}
             key={String(card.estimatePoints)}
             onBlur={(e) => {
-              const v = e.target.value === "" ? null : Number(e.target.value);
-              if (v !== card.estimatePoints && (v === null || !Number.isNaN(v))) patch({ estimatePoints: v });
+              const v = parsePoints(e.target.value);
+              if (v === undefined) {
+                toast.error("La estimación va de 0 a 1000 puntos");
+                e.target.value = card.estimatePoints?.toString() ?? "";
+              } else if (v !== card.estimatePoints) patch({ estimatePoints: v });
             }}
           />
           {card.estimatePoints !== null && canEdit && (

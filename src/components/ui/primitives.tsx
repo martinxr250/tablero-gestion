@@ -44,8 +44,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
+// Límites del servidor por defecto: correos de hasta 254 caracteres y contraseñas de hasta 128
+// (también cuando se muestra la contraseña y el tipo pasa a "text").
+const DEFAULT_MAX: Record<string, number> = { email: 254, "current-password": 128, "new-password": 128 };
+
 export const Input = forwardRef<HTMLInputElement, ComponentProps<"input">>(function Input(props, ref) {
-  return <UiInput ref={ref} {...props} />;
+  const maxLength = props.maxLength ?? DEFAULT_MAX[props.type === "email" ? "email" : (props.autoComplete ?? "")];
+  return <UiInput ref={ref} {...props} maxLength={maxLength} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, ComponentProps<"textarea">>(function Textarea(props, ref) {

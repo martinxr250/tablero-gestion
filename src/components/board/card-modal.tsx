@@ -113,7 +113,11 @@ function CardTitle({ card, canEdit, onSave }: { card: CardDetail; canEdit: boole
         value={value}
         maxLength={200}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={() => value.trim() && value !== card.title && onSave(value.trim())}
+        onBlur={() => {
+          // Un título vacío no se guarda: vuelve al anterior.
+          if (!value.trim()) setValue(card.title);
+          else if (value.trim() !== card.title) onSave(value.trim());
+        }}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
     </span>
@@ -508,7 +512,7 @@ function Relations({ card, canEdit, refresh }: { card: CardDetail; canEdit: bool
                   <option value="blocks">Bloquea a</option>
                   <option value="duplicates">Duplica a</option>
                 </Select>
-                <Input className="h-9" placeholder="Buscar tarjeta…" aria-label="Buscar tarjeta" value={q} onChange={(e) => setQ(e.target.value)} />
+                <Input className="h-9" placeholder="Buscar tarjeta…" aria-label="Buscar tarjeta" maxLength={100} value={q} onChange={(e) => setQ(e.target.value)} />
                 <ul className="max-h-56 overflow-y-auto scroll-thin">
                   {candidates.data?.cards.map((c) => (
                     <li key={c.id}>
@@ -675,9 +679,9 @@ function Comments({ cardId, board, canComment, canModerate }: { cardId: string; 
                     edit.mutate(editing, { onSuccess: () => setEditing(null) });
                   }}
                 >
-                  <Textarea rows={2} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} aria-label="Editar comentario" />
+                  <Textarea rows={2} maxLength={5000} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} aria-label="Editar comentario" />
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" loading={edit.isPending}>
+                    <Button type="submit" size="sm" loading={edit.isPending} disabled={!editing.body.trim()}>
                       Guardar
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>

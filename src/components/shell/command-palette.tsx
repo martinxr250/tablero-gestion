@@ -49,7 +49,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           <Command shouldFilter={false} label="Búsqueda rápida">
             <div className="flex items-center gap-2 border-b border-border px-4">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <Command.Input value={q} onValueChange={setQ} placeholder="Buscar tareas, tableros…" className="h-12 w-full bg-transparent text-sm outline-none" />
+              <Command.Input value={q} onValueChange={setQ} maxLength={100} placeholder="Buscar tareas, tableros…" className="h-12 w-full bg-transparent text-sm outline-none" />
             </div>
             <Command.List className="max-h-96 overflow-y-auto p-2 scroll-thin">
               {debounced.length >= 2 && !isFetching && !data?.boards.length && !data?.cards.length && (
