@@ -47,6 +47,11 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "card.recurred": return `programó la próxima "${t}"`;
     case "card.duplicated": return `duplicó "${t}"`;
     case "card.subtask_created": return `agregó la subtarea "${t}" a "${s(d.parent)}"`;
+    case "share.enabled": return d.kind === "public" ? "activó el enlace público de solo lectura" : "activó el enlace para unirse";
+    case "share.updated": return "cambió el permiso del enlace para unirse";
+    case "share.regenerated": return d.kind === "public" ? "generó un enlace público nuevo" : "generó un enlace nuevo para unirse";
+    case "share.disabled": return d.kind === "public" ? "desactivó el enlace público" : "desactivó el enlace para unirse";
+    case "share.joined": return "se unió al tablero con un enlace";
     case "cards.bulk_created": return `cargó ${String(d.count ?? "")} tareas de una vez`;
     case "qa.approved": return `aprobó "${t}" en control de calidad`;
     case "qa.rejected": return `rechazó "${t}" en control de calidad`;

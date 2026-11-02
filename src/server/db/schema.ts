@@ -471,3 +471,16 @@ export const cardWatchers = app.table(
   },
   (t) => [primaryKey({ columns: [t.cardId, t.userId] })],
 );
+
+export type ShareKind = "public" | "join";
+export const boardShareLinks = app.table("board_share_links", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  kind: text("kind").$type<ShareKind>().notNull(),
+  role: text("role").$type<"viewer" | "commenter" | "editor">().notNull().default("viewer"),
+  tokenHash: text("token_hash").notNull(),
+  tokenEnc: text("token_enc").notNull(),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
