@@ -204,12 +204,9 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
 
       <nav className="space-y-1 px-3">
         <NavLink href="/dashboard" icon={LayoutDashboard} label="Inicio" mini={mini} active={pathname === "/dashboard"} />
-        <NavLink href="/work" icon={ListTodo} label="Mi trabajo" mini={mini} active={pathname === "/work"} />
         <NavLink href="/search" icon={Search} label="Búsqueda" mini={mini} active={pathname === "/search"} />
+        <NavLink href="/work" icon={ListTodo} label="Mi trabajo" mini={mini} active={pathname === "/work"} />
         <NavLink href="/notifications" icon={Bell} label="Notificaciones" mini={mini} active={pathname === "/notifications"} />
-        {orgId && currentOrg?.role !== "guest" && (
-          <NavLink href={`/o/${orgId}/settings`} icon={Settings} label="Ajustes" mini={mini} active={pathname === `/o/${orgId}/settings`} />
-        )}
       </nav>
 
       <div className={cn("mx-5 my-4 border-t", mini && "md:mx-6")} />
@@ -343,6 +340,20 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
           <button onClick={logout} className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Salir" title="Salir">
             <LogOut className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Salir</span>
           </button>
+          {orgId && currentOrg?.role !== "guest" && (
+            <Link
+              href={`/o/${orgId}/settings`}
+              className={cn(
+                "inline-flex items-center gap-1.5 hover:text-foreground",
+                pathname === `/o/${orgId}/settings` && "text-foreground",
+                mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent",
+              )}
+              aria-label="Ajustes de la organización"
+              title="Ajustes de la organización"
+            >
+              <Settings className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Ajustes</span>
+            </Link>
+          )}
           <Link href="/settings" className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Mi cuenta" title={user.email}>
             <UserRound className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Mi cuenta</span>
           </Link>
