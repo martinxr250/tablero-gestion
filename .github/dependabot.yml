@@ -3,7 +3,11 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    # Espera 7 días antes de proponer versiones recién publicadas.
+    cooldown: { default-days: 7 }
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    # Espera 7 días antes de proponer versiones recién publicadas.
+    cooldown: { default-days: 7 }
