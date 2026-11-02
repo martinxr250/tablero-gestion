@@ -12,8 +12,12 @@ type GhIssue = {
 };
 type GhPull = {
   id: number; number: number; title: string; body: string | null; state: "open" | "closed"; merged_at: string | null; draft?: boolean;
-  html_url: string; user: { login: string } | null; head: { ref: string; sha: string }; updated_at: string;
+  html_url: string; user: { login: string } | null; head: { ref: string; sha: string }; updated_at: string; merge_commit_sha?: string | null;
 };
+
+/** Eventos que recibe el webhook: issues, PR, revisiones, checks y despliegues. */
+export const WEBHOOK_EVENTS = ["issues", "pull_request", "pull_request_review", "check_suite", "check_run", "deployment", "deployment_status"];
+type GhDeployment = { id: number; sha: string; ref: string | null; environment: string; production_environment?: boolean; transient_environment?: boolean; created_at: string };
 
 const toIssue = (i: GhIssue): RemoteIssue => ({
   id: i.id,
@@ -136,10 +140,42 @@ export class GitHubClient implements VcsClient {
     const r = await this.req<{ id: number }>("POST", `/repos/${this.repo(repo)}/hooks`, {
       name: "web",
       active: true,
-      events: ["issues", "pull_request", "pull_request_review", "check_suite"],
+      events: WEBHOOK_EVENTS,
       config: { url, content_type: "json", secret, insecure_ssl: "0" },
     });
     return r.data.id;
+  }
+
+  async updateWebhookEvents(repo: string, id: number) {
+    await this.req("PATCH", `/repos/${this.repo(repo)}/hooks/${id}`, { events: WEBHOOK_EVENTS, active: true });
+  }
+
+  async listDeployments(repo: string, perPage: number) {
+    const r = await this.req<GhDeployment[]>("GET", `/repos/${this.repo(repo)}/deployments?per_page=${Math.min(100, perPage)}`);
+    return r.data.map((d) => ({
+      id: d.id,
+      sha: d.sha,
+      ref: d.ref,
+      environment: d.environment,
+      production: d.production_environment ?? null,
+      transient: d.transient_environment ?? null,
+      createdAt: d.created_at,
+    }));
+  }
+
+  async latestDeploymentStatus(repo: string, id: number) {
+    const r = await this.req<{ state: string; environment_url?: string | null; target_url?: string | null; created_at: string }[]>(
+      "GET",
+      `/repos/${this.repo(repo)}/deployments/${id}/statuses?per_page=1`,
+    );
+    const s = r.data[0];
+    return s ? { state: s.state, url: s.environment_url || s.target_url || null, createdAt: s.created_at } : null;
+  }
+
+  async commitIncluded(repo: string, base: string, head: string) {
+    if (base === head) return true;
+    const r = await this.req<{ status: string }>("GET", `/repos/${this.repo(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+    return r.data.status === "ahead" || r.data.status === "identical";
   }
 
   async deleteWebhook(repo: string, id: number) {
@@ -160,6 +196,7 @@ function toPull(p: GhPull): RemotePull {
     author: p.user?.login ?? null,
     branch: p.head.ref,
     headSha: p.head.sha,
+    mergeSha: p.merged_at ? (p.merge_commit_sha ?? null) : null,
     updatedAt: p.updated_at,
   };
 }

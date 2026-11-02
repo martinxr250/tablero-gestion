@@ -118,6 +118,24 @@ export async function boardSignals(tx: Tx, board: Board) {
       (select count(*)::int from app.cards q where q.board_id = ${board.id} and q.completed_at > now() - interval '30 days') as "completed30d"
     from pr join app.cards c on c.id = pr.card_id`);
 
+  // Despliegues (solo con evidencia vinculada): pendientes, desplegadas y fallidas en producción.
+  const deploy = await tx.execute<{ id: string; title: string; done: boolean; qa_ok: boolean; status: "pending" | "deployed" | "failed" | "in_progress" }>(sql`
+    select c.id, c.title, (c.completed_at is not null) as done, (c.qa_status = 'approved') as qa_ok,
+      case
+        when last.state = 'failed' then 'failed'
+        when last.state in ('pending', 'building', 'deploying') then 'in_progress'
+        when last.state = 'deployed' then 'deployed'
+        else 'pending'
+      end as status
+    from app.cards c
+    left join lateral (
+      select d.state from app.card_deployments cd join app.deployments d on d.id = cd.deployment_id
+      where cd.card_id = c.id and d.env_kind = 'production' order by d.created_at desc limit 1
+    ) last on true
+    where c.board_id = ${board.id} and c.archived_at is null
+      and exists (select 1 from app.card_dev_refs r where r.card_id = c.id and r.kind = 'pr' and r.merged)`);
+  const deployCount = (k: string) => deploy.filter((d) => d.status === k).length;
+
   // Dependencias: cadenas, críticas y ciclos (datos anteriores a la validación).
   const deps = await tx.execute<{ id: string; title: string; depth: number; dependents: number; in_cycle: boolean }>(sql`
     with recursive open_blocks as (
@@ -199,6 +217,10 @@ export async function boardSignals(tx: Tx, board: Board) {
   for (const p of people.filter((x) => x.status === "over")) {
     risks.push({ severity: 2, problem: `${p.name} está sobrecargado`, project: board.name, tasks: [], cause: `${p.points} pts asignados con capacidad de ${p.capacity} pts${p.unestimated ? ` (más ${p.unestimated} sin estimar)` : ""}.`, impact: "Sus tareas pueden atrasarse.", action: "Redistribuir tareas o ajustar la capacidad." });
   }
+  const failedDeploys = deploy.filter((d) => d.status === "failed");
+  if (failedDeploys.length) {
+    risks.push({ severity: 3, problem: `${failedDeploys.length} entrega(s) con despliegue a producción fallido`, project: board.name, tasks: failedDeploys.slice(0, 10).map((d) => ({ id: d.id, title: d.title })), cause: "El último despliegue a producción que incluye su código falló.", impact: "El cambio no llegó a los usuarios.", action: "Revisar el despliegue y volver a publicar." });
+  }
   const overdue = await tx.execute<{ id: string; title: string }>(sql`
     select id, title from app.cards where board_id = ${board.id} and archived_at is null and completed_at is null and due_at < now() order by due_at limit 10`);
   if (overdue.length) {
@@ -224,7 +246,15 @@ export async function boardSignals(tx: Tx, board: Board) {
       readyForQa: health?.readyForQa ?? 0,
       approved: health?.approved ?? 0,
       completed30d: health?.completed30d ?? 0,
+      pendingDeploy: deployCount("pending"),
+      deploying: deployCount("in_progress"),
+      deployed: deployCount("deployed"),
+      deployFailed: deployCount("failed"),
+      // Listas para entregar: sin terminar, con QA aprobada o ya desplegadas en producción.
+      readyDelivery: deploy.filter((d) => !d.done && d.status === "deployed").length + (health?.approved ?? 0) - deploy.filter((d) => !d.done && d.status === "deployed" && d.qa_ok).length,
+      blockedDelivery: summary!.blocked,
     },
+    deploys: deploy.filter((d) => d.status !== "deployed" && !d.done).slice(0, 20).map(({ id, title, status }) => ({ id, title, status })),
     dependencies: {
       chains: chains.slice(0, 10).map((c) => ({ id: c.id, title: c.title, depth: c.depth })),
       critical: critical.slice(0, 10).map((c) => ({ id: c.id, title: c.title, dependents: c.dependents })),

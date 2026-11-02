@@ -22,6 +22,7 @@ import {
 } from "../db/schema";
 import { COLORS, notify } from "../modules/shared";
 import { sanitizeRichText } from "../modules/richtext";
+import { syncDeployments } from "./deployments";
 import { GitHubClient } from "./github";
 import { docToMarkdown, markdownToDoc } from "./markdown";
 import { referencedIssues, type RemoteIssue, type RemotePull, type VcsClient } from "./provider";
@@ -460,6 +461,8 @@ export async function syncPull(ctx: RepoContext, pull: RemotePull, opts: { detai
         branch: pull.branch.slice(0, 200),
         merged: pull.merged,
         draft: pull.draft,
+        headSha: pull.headSha,
+        mergeSha: pull.mergeSha,
         remoteUpdatedAt: new Date(pull.updatedAt),
         ...(opts.details ? { checksStatus: checks, reviewStatus: review } : {}),
       };
@@ -533,6 +536,8 @@ export async function syncRepo(boardRepoId: string, opts: { full?: boolean } = {
       }
       if (!hasMore) break;
     }
+    // Despliegues recientes (respaldo de los webhooks; pocas llamadas para cuidar la cuota).
+    await syncDeployments(ctx, 5).catch((err) => logger.warn("deployments_sync_failed", { boardRepoId, err }));
     await withSystem((tx) => tx.update(boardRepos).set({ lastSyncedAt: started, lastSyncError: null }).where(eq(boardRepos.id, boardRepoId)));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error desconocido";

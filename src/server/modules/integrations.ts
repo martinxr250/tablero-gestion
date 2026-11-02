@@ -24,6 +24,7 @@ import {
 } from "../db/schema";
 import { GITHUB_API, GitHubClient } from "../integrations/github";
 import type { RemoteIssue, RemotePull } from "../integrations/provider";
+import { syncDeployments, upsertDeployment } from "../integrations/deployments";
 import { clientFor, createIssueForCard, linkExistingIssue, loadRepo, notifyCardPeople, reconcileIssue, resolveConflict, syncPull, syncRepo } from "../integrations/sync";
 import { boardAccess, cardAccess, orgAccess, orgRoleAtLeast } from "./access";
 
@@ -297,6 +298,55 @@ export const integrationRoutes = [
     },
   }),
 
+  // ───────────── Despliegues ─────────────
+  route({
+    method: "POST",
+    path: "/boards/:boardId/repo/deployments/sync",
+    summary: "Conciliar despliegues: trae los recientes de GitHub y actualiza los eventos del webhook",
+    tag: "Integraciones",
+    rateLimit: [{ name: "vcs-deploy-sync", by: "user", limit: 6, windowSec: 60 }],
+    handler: async ({ me, params, audit: actx }) => {
+      const { board } = await withUser(me.id, (tx) => boardAccess(tx, actx, params.boardId, "edit"));
+      const repo = await boardRepoFor(board.id);
+      if (!repo) throw notFound("Repositorio");
+      const ctx = await withSystem((tx) => loadRepo(tx, repo.id));
+      // Webhooks creados antes de esta versión no recibían eventos de despliegue.
+      if (repo.webhookId) await ctx.client.updateWebhookEvents(repo.repoFullName, repo.webhookId).catch((err) => logger.warn("webhook_update_failed", { err }));
+      const synced = await syncDeployments(ctx, 20);
+      await withUser(me.id, (tx) => audit(tx, actx, "vcs.deployments_synced", { orgId: board.orgId, targetType: "board", targetId: board.id, data: { synced } }));
+      return { synced };
+    },
+  }),
+
+  route({
+    method: "GET",
+    path: "/boards/:boardId/deployments",
+    summary: "Historial de despliegues del repositorio del tablero con sus tarjetas",
+    tag: "Integraciones",
+    query: z.object({ before: z.iso.datetime({ offset: true }).optional() }),
+    handler: async ({ me, params, query }) =>
+      withUser(me.id, async (tx) => {
+        const { board } = await boardAccess(tx, { actorId: me.id }, params.boardId, "view", { allowArchived: true });
+        const rows = await tx.execute<{
+          id: string; sha: string; ref: string | null; environment: string; env_kind: string; state: string; url: string | null;
+          started_at: Date | null; finished_at: Date | null; external_id: string; repo: string; cards: { id: string; title: string }[] | null;
+        }>(sql`
+          select d.id, d.sha, d.ref, d.environment, d.env_kind, d.state, d.url, d.started_at, d.finished_at, d.external_id::text, r.repo_full_name as repo,
+            (select json_agg(json_build_object('id', c.id, 'title', c.title) order by c.title)
+               from app.card_deployments cd join app.cards c on c.id = cd.card_id
+               where cd.deployment_id = d.id and c.board_id = ${board.id}) as cards
+          from app.deployments d join app.board_repos r on r.id = d.board_repo_id
+          where r.board_id = ${board.id} ${query.before ? sql`and d.created_at < ${query.before}` : sql``}
+          order by d.created_at desc limit 30`);
+        return {
+          deployments: rows.map((d) => ({
+            id: d.id, sha: d.sha, ref: d.ref, environment: d.environment, envKind: d.env_kind, state: d.state, url: d.url,
+            startedAt: d.started_at, finishedAt: d.finished_at, externalId: d.external_id, repo: d.repo, cards: d.cards ?? [],
+          })),
+        };
+      }),
+  }),
+
   // ───────────── Tarjeta ↔ issue ─────────────
   route({
     method: "GET",
@@ -312,8 +362,19 @@ export const integrationRoutes = [
           .where(eq(boardRepos.boardId, board.id));
         const [link] = await tx.select().from(cardIssueLinks).where(eq(cardIssueLinks.cardId, params.cardId));
         const refs = await tx.select().from(cardDevRefs).where(eq(cardDevRefs.cardId, params.cardId)).orderBy(sql`${cardDevRefs.remoteUpdatedAt} desc nulls last`);
+        // Último despliegue de la tarjeta por tipo de entorno (evidencia verificada al vincular).
+        const deploys = await tx.execute<{ env_kind: string; environment: string; state: string; url: string | null; sha: string; finished_at: Date | null; started_at: Date | null }>(sql`
+          select distinct on (d.env_kind) d.env_kind, d.environment, d.state, d.url, d.sha, d.finished_at, d.started_at
+          from app.card_deployments cd join app.deployments d on d.id = cd.deployment_id
+          where cd.card_id = ${params.cardId}
+          order by d.env_kind, d.created_at desc`);
+        const [lastProd] = await tx.execute<{ finished_at: Date }>(sql`
+          select max(d.finished_at) as finished_at from app.card_deployments cd join app.deployments d on d.id = cd.deployment_id
+          where cd.card_id = ${params.cardId} and d.env_kind = 'production' and d.state = 'deployed'`);
         return {
           repo: repo ?? null,
+          deployments: deploys.map((d) => ({ envKind: d.env_kind, environment: d.environment, state: d.state, url: d.url, sha: d.sha.slice(0, 7), finishedAt: d.finished_at, startedAt: d.started_at })),
+          lastProductionDeployAt: lastProd?.finished_at ?? null,
           issue: link
             ? {
                 number: link.issueNumber,
@@ -562,10 +623,12 @@ export const integrationRoutes = [
         const p = payload.pull_request as {
           id: number; number: number; title: string; body: string | null; state: "open" | "closed"; merged_at: string | null;
           draft?: boolean; html_url: string; user: { login: string } | null; head: { ref: string; sha: string }; updated_at: string;
+          merge_commit_sha?: string | null;
         };
         const pull: RemotePull = {
           id: p.id, number: p.number, title: p.title, body: p.body ?? "", state: p.state, merged: !!p.merged_at, draft: !!p.draft,
-          htmlUrl: p.html_url, author: p.user?.login ?? null, branch: p.head.ref, headSha: p.head.sha, updatedAt: p.updated_at,
+          htmlUrl: p.html_url, author: p.user?.login ?? null, branch: p.head.ref, headSha: p.head.sha,
+          mergeSha: p.merged_at ? (p.merge_commit_sha ?? null) : null, updatedAt: p.updated_at,
         };
         await syncPull(ctx, pull, { details: true });
         // Revisión solicitada: avisa solo a la persona pedida, si su cuenta de GitHub está asociada.
@@ -590,6 +653,15 @@ export const integrationRoutes = [
             }
           });
         }
+      } else if ((event === "deployment" || event === "deployment_status") && payload.deployment) {
+        // Datos del propio evento (firmado): sin llamadas extra a la API.
+        const d = payload.deployment as { id: number; sha: string; ref: string | null; environment: string; production_environment?: boolean; transient_environment?: boolean; created_at: string };
+        const st = payload.deployment_status as { state: string; environment_url?: string | null; target_url?: string | null; created_at: string } | undefined;
+        await upsertDeployment(
+          ctx,
+          { id: d.id, sha: d.sha, ref: d.ref, environment: d.environment, production: d.production_environment ?? null, transient: d.transient_environment ?? null, createdAt: d.created_at },
+          st ? { state: st.state, url: st.environment_url || st.target_url || null, createdAt: st.created_at } : null,
+        );
       } else if (event === "check_suite" || event === "check_run") {
         // Los checks cambian el estado de PRs ya conocidos: se refrescan los de ese commit.
         const sha =

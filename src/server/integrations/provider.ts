@@ -24,8 +24,22 @@ export type RemotePull = {
   author: string | null;
   branch: string;
   headSha: string;
+  /** Commit resultante del merge (solo si está fusionado). */
+  mergeSha: string | null;
   updatedAt: string;
 };
+
+export type RemoteDeployment = {
+  id: number;
+  sha: string;
+  ref: string | null;
+  environment: string;
+  production: boolean | null;
+  transient: boolean | null;
+  createdAt: string;
+};
+
+export type RemoteDeploymentStatus = { state: string; url: string | null; createdAt: string } | null;
 
 export type RemoteRepo = { id: number; fullName: string; htmlUrl: string; private: boolean; canPush: boolean };
 
@@ -41,6 +55,11 @@ export interface VcsClient {
   updateIssue(repo: string, number: number, input: IssueInput): Promise<RemoteIssue>;
   listPulls(repo: string, page: number): Promise<{ pulls: RemotePull[]; hasMore: boolean }>;
   getPull(repo: string, number: number): Promise<RemotePull>;
+  listDeployments(repo: string, perPage: number): Promise<RemoteDeployment[]>;
+  latestDeploymentStatus(repo: string, id: number): Promise<RemoteDeploymentStatus>;
+  /** true si el commit `base` está incluido en `head` (comparación de GitHub). */
+  commitIncluded(repo: string, base: string, head: string): Promise<boolean>;
+  updateWebhookEvents(repo: string, id: number): Promise<void>;
   checksStatus(repo: string, sha: string): Promise<"success" | "failure" | "pending" | null>;
   reviewStatus(repo: string, number: number): Promise<"approved" | "changes_requested" | "commented" | null>;
   createWebhook(repo: string, url: string, secret: string): Promise<number>;

@@ -428,6 +428,8 @@ export const cardDevRefs = app.table("card_dev_refs", {
   reviewStatus: text("review_status"),
   remoteUpdatedAt: ts("remote_updated_at"),
   linkedManually: boolean("linked_manually").notNull().default(false),
+  headSha: text("head_sha"),
+  mergeSha: text("merge_sha"),
 });
 
 export const vcsUserLinks = app.table(
@@ -554,3 +556,33 @@ export const notificationSettings = app.table("notification_settings", {
   muted: text("muted").array().notNull().default([]),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
+
+export type DeployState = "pending" | "building" | "deploying" | "deployed" | "failed" | "canceled" | "unknown";
+export type EnvKind = "preview" | "staging" | "production" | "other";
+export const deployments = app.table("deployments", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardRepoId: uuid("board_repo_id").notNull(),
+  externalId: bigint("external_id", { mode: "number" }).notNull(),
+  sha: text("sha").notNull(),
+  ref: text("ref"),
+  environment: text("environment").notNull(),
+  envKind: text("env_kind").$type<EnvKind>().notNull(),
+  state: text("state").$type<DeployState>().notNull(),
+  url: text("url"),
+  startedAt: ts("started_at"),
+  finishedAt: ts("finished_at"),
+  remoteUpdatedAt: ts("remote_updated_at"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const cardDeployments = app.table(
+  "card_deployments",
+  {
+    orgId: uuid("org_id").notNull(),
+    cardId: uuid("card_id").notNull(),
+    deploymentId: uuid("deployment_id").notNull(),
+    linkedAt: ts("linked_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.deploymentId] })],
+);
