@@ -62,7 +62,7 @@ jobs:
           pipx install semgrep
           semgrep scan --config p/typescript --config p/nextjs --config p/owasp-top-ten --config p/secrets --error --metrics=off
       - name: Dependencias vulnerables (OSV-Scanner)
-        uses: google/osv-scanner-action/osv-scanner-action@e69cc6c86b31f1e7e23935bbe7031b50e51082de # v2.0.2
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
