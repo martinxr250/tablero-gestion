@@ -30,8 +30,9 @@ import { positionAfter } from "./positions";
 import { richTextInput, sanitizeRichText } from "./richtext";
 import { logActivity, notify } from "./shared";
 import { schedulePush } from "../integrations/sync";
-import { assertCanComplete, assertSprintInBoard, assertValidParent, notifyWatchers, qaOnMove, spawnRecurrence } from "./planning";
+import { assertSprintInBoard, assertValidParent, notifyWatchers, qaOnMove, spawnRecurrence } from "./planning";
 import { cardMirrorList } from "./mirrors";
+import { assertCompletion, type RuleResult } from "./delivery";
 
 const title = z.string().trim().min(1, "Ingresá un título").max(200);
 const priority = z.enum(["none", "low", "medium", "high", "urgent"]);
@@ -210,6 +211,7 @@ export const cardRoutes = [
         }
         const patch: Partial<typeof cards.$inferInsert> = {};
         const changed: string[] = [];
+        let completionCheck: RuleResult[] | null = null;
         if (body.title !== undefined && body.title !== card.title) {
           patch.title = body.title;
           changed.push("title");
@@ -234,7 +236,8 @@ export const cardRoutes = [
           changed.push("dueAt");
         }
         if (body.completed !== undefined && body.completed !== (card.completedAt !== null)) {
-          if (body.completed) assertCanComplete(board, card);
+          // Reglas de cierre del tablero (QA, subtareas, dependencias, PR, CI…) validadas en el servidor.
+          if (body.completed) completionCheck = await assertCompletion(tx, board, card);
           patch.completedAt = body.completed ? new Date() : null;
           changed.push("completed");
         }
@@ -258,6 +261,14 @@ export const cardRoutes = [
         }
         if (changed.length === 0) return { card: await cardDetail(tx, card.id, me.id) };
         await tx.update(cards).set(patch).where(eq(cards.id, card.id));
+        if (completionCheck) {
+          await audit(tx, actx, "card.completed", {
+            orgId: board.orgId,
+            targetType: "card",
+            targetId: card.id,
+            data: { rules: completionCheck.map((r) => ({ rule: r.key, ok: r.ok, level: r.level })) },
+          });
+        }
         const action = changed.length === 1 && changed[0] === "completed" ? (body.completed ? "card.completed" : "card.reopened") : "card.updated";
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action, data: { title: patch.title ?? card.title, fields: changed } });
         if (patch.ownerId) {
@@ -287,6 +298,7 @@ export const cardRoutes = [
         if (!target) throw badRequest("La lista de destino no pertenece a este tablero");
         if (body.afterCardId === card.id) throw badRequest("Posición inválida");
         const position = await positionAfter(tx, "cards", target.id, body.afterCardId, card.id);
+        if (target.id !== card.listId && target.id === board.doneListId) await assertCompletion(tx, board, card);
         const qaPatch = target.id !== card.listId ? qaOnMove(board, card, target.id) : {};
         await tx.update(cards).set({ listId: target.id, position, ...qaPatch }).where(eq(cards.id, card.id));
         if (target.id !== card.listId) {

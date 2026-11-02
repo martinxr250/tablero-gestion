@@ -14,6 +14,7 @@ import { shareRoutes } from "../modules/share";
 import { fieldRoutes } from "../modules/fields";
 import { workRoutes } from "../modules/work";
 import { mirrorRoutes } from "../modules/mirrors";
+import { deliveryRoutes } from "../modules/delivery";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -30,6 +31,7 @@ const domainRoutes: RouteDef[] = [
   ...fieldRoutes,
   ...workRoutes,
   ...mirrorRoutes,
+  ...deliveryRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

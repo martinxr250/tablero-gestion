@@ -6,7 +6,7 @@ import { route } from "../api/router";
 import { audit } from "../core/audit";
 import { decrypt, encrypt, randomToken, safeEqual } from "../core/crypto";
 import { env } from "../core/env";
-import { AppError, badRequest, forbidden, notFound } from "../core/errors";
+import { AppError, badRequest, conflict, forbidden, notFound } from "../core/errors";
 import { uuidv7 } from "../core/ids";
 import { logger } from "../core/logger";
 import { withSystem, withUser } from "../db/client";
@@ -24,7 +24,7 @@ import {
 } from "../db/schema";
 import { GITHUB_API, GitHubClient } from "../integrations/github";
 import type { RemoteIssue, RemotePull } from "../integrations/provider";
-import { clientFor, createIssueForCard, loadRepo, reconcileIssue, resolveConflict, syncPull, syncRepo } from "../integrations/sync";
+import { clientFor, createIssueForCard, linkExistingIssue, loadRepo, notifyCardPeople, reconcileIssue, resolveConflict, syncPull, syncRepo } from "../integrations/sync";
 import { boardAccess, cardAccess, orgAccess, orgRoleAtLeast } from "./access";
 
 const providerSchema = z.enum(["github"]);
@@ -337,6 +337,8 @@ export const integrationRoutes = [
               draft: r.draft,
               checks: r.checksStatus,
               review: r.reviewStatus,
+              merged: r.merged,
+              manual: r.linkedManually,
               updatedAt: r.remoteUpdatedAt,
             })),
         };
@@ -367,6 +369,98 @@ export const integrationRoutes = [
 
   route({
     method: "POST",
+    path: "/cards/:cardId/issue/link",
+    summary: "Vincular la tarjeta con un issue que ya existe en el repositorio del tablero",
+    tag: "Integraciones",
+    rateLimit: [{ name: "vcs-issue", by: "user", limit: 60, windowSec: 3600 }],
+    body: z.object({ number: z.number().int().positive().max(9_999_999) }),
+    handler: async ({ me, params, body, audit: actx }) => {
+      const { board, card } = await withUser(me.id, (tx) => cardAccess(tx, actx, params.cardId, "edit"));
+      const repo = await boardRepoFor(board.id);
+      if (!repo) throw badRequest("El tablero no tiene un repositorio vinculado");
+      const taken = await withSystem((tx) =>
+        tx
+          .select({ cardId: cardIssueLinks.cardId, boardRepoId: cardIssueLinks.boardRepoId, issueNumber: cardIssueLinks.issueNumber })
+          .from(cardIssueLinks)
+          .where(sql`${cardIssueLinks.cardId} = ${card.id} or (${cardIssueLinks.boardRepoId} = ${repo.id} and ${cardIssueLinks.issueNumber} = ${body.number})`),
+      );
+      if (taken.some((t) => t.cardId === card.id)) throw conflict("La tarjeta ya está vinculada a un issue");
+      if (taken.length) throw conflict(`El issue #${body.number} ya está vinculado a otra tarjeta`);
+      const ctx = await withSystem((tx) => loadRepo(tx, repo.id));
+      const issue = await ctx.client.getIssue(repo.repoFullName, body.number).catch(() => null);
+      if (!issue) throw notFound("Issue");
+      await linkExistingIssue(ctx, card.id, issue);
+      await withUser(me.id, (tx) =>
+        tx.execute(sql`
+          insert into app.activity_logs (org_id, board_id, card_id, actor_id, action, data)
+          values (${board.orgId}, ${board.id}, ${card.id}, ${me.id}, 'vcs.issue_linked',
+            ${JSON.stringify({ title: card.title, number: issue.number, provider: repo.provider })}::jsonb)`),
+      );
+      return { number: issue.number, url: issue.htmlUrl };
+    },
+  }),
+
+  route({
+    method: "POST",
+    path: "/cards/:cardId/dev/pulls",
+    summary: "Vincular a mano un pull request del repositorio del tablero",
+    tag: "Integraciones",
+    status: 201,
+    rateLimit: [{ name: "vcs-pull", by: "user", limit: 60, windowSec: 3600 }],
+    body: z.object({ number: z.number().int().positive().max(9_999_999) }),
+    handler: async ({ me, params, body, audit: actx }) => {
+      const { board, card } = await withUser(me.id, (tx) => cardAccess(tx, actx, params.cardId, "edit"));
+      const repo = await boardRepoFor(board.id);
+      if (!repo) throw badRequest("El tablero no tiene un repositorio vinculado");
+      const ctx = await withSystem((tx) => loadRepo(tx, repo.id));
+      const pull = await ctx.client.getPull(repo.repoFullName, body.number).catch(() => null);
+      if (!pull) throw notFound("Pull request");
+      await withSystem((tx) =>
+        tx
+          .insert(cardDevRefs)
+          .values({
+            id: uuidv7(),
+            orgId: board.orgId,
+            cardId: card.id,
+            kind: "pr",
+            externalId: String(pull.number),
+            title: pull.title.slice(0, 300),
+            state: pull.merged ? "merged" : pull.state,
+            url: pull.htmlUrl,
+            linkedManually: true,
+          })
+          .onConflictDoUpdate({ target: [cardDevRefs.cardId, cardDevRefs.kind, cardDevRefs.externalId], set: { linkedManually: true } }),
+      );
+      await syncPull(ctx, pull, { details: true });
+      await withUser(me.id, (tx) =>
+        tx.execute(sql`
+          insert into app.activity_logs (org_id, board_id, card_id, actor_id, action, data)
+          values (${board.orgId}, ${board.id}, ${card.id}, ${me.id}, 'vcs.pull_linked',
+            ${JSON.stringify({ title: card.title, number: pull.number })}::jsonb)`),
+      );
+      return { number: pull.number };
+    },
+  }),
+
+  route({
+    method: "DELETE",
+    path: "/cards/:cardId/dev/pulls/:number",
+    summary: "Desvincular un pull request de la tarjeta (en GitHub no cambia nada)",
+    tag: "Integraciones",
+    handler: async ({ me, params }) =>
+      withUser(me.id, async (tx) => {
+        await cardAccess(tx, { actorId: me.id }, params.cardId, "edit");
+        const res = await tx
+          .delete(cardDevRefs)
+          .where(and(eq(cardDevRefs.cardId, params.cardId), eq(cardDevRefs.kind, "pr"), eq(cardDevRefs.externalId, String(Number(params.number)))))
+          .returning({ id: cardDevRefs.id });
+        if (res.length === 0) throw notFound("Pull request");
+        return undefined;
+      }),
+  }),
+
+  route({
+    method: "POST",
     path: "/cards/:cardId/issue/resolve",
     summary: "Resolver un conflicto de sincronización",
     tag: "Integraciones",
@@ -386,7 +480,8 @@ export const integrationRoutes = [
     handler: async ({ me, params }) =>
       withUser(me.id, async (tx) => {
         await cardAccess(tx, { actorId: me.id }, params.cardId, "edit");
-        await tx.delete(cardDevRefs).where(eq(cardDevRefs.cardId, params.cardId));
+        // Los PR vinculados a mano se conservan: no dependen del issue.
+        await tx.delete(cardDevRefs).where(and(eq(cardDevRefs.cardId, params.cardId), eq(cardDevRefs.linkedManually, false)));
         await tx.delete(cardIssueLinks).where(eq(cardIssueLinks.cardId, params.cardId));
         return undefined;
       }),
@@ -473,10 +568,33 @@ export const integrationRoutes = [
           htmlUrl: p.html_url, author: p.user?.login ?? null, branch: p.head.ref, headSha: p.head.sha, updatedAt: p.updated_at,
         };
         await syncPull(ctx, pull, { details: true });
-      } else if (event === "check_suite") {
-        // Los checks cambian el estado de PRs ya conocidos: se refresca la primera página.
+        // Revisión solicitada: avisa solo a la persona pedida, si su cuenta de GitHub está asociada.
+        const reviewer = (payload.requested_reviewer as { login?: string } | undefined)?.login;
+        if (event === "pull_request" && payload.action === "review_requested" && reviewer) {
+          await withSystem(async (tx) => {
+            const [who] = await tx
+              .select({ userId: vcsUserLinks.userId })
+              .from(vcsUserLinks)
+              .where(and(eq(vcsUserLinks.orgId, repo.orgId), eq(vcsUserLinks.provider, "github"), eq(vcsUserLinks.login, reviewer)));
+            if (!who) return;
+            const cards = await tx.execute<{ card_id: string }>(sql`
+              select d.card_id from app.card_dev_refs d join app.cards c on c.id = d.card_id
+              where c.board_id = ${repo.boardId} and d.kind = 'pr' and d.external_id = ${String(pull.number)}`);
+            for (const c of cards) {
+              await notifyCardPeople(tx, c.card_id, {
+                type: "pr.review_requested",
+                data: { number: pull.number, prTitle: pull.title.slice(0, 200), url: pull.htmlUrl },
+                dedupeKey: `review:${pull.number}:${reviewer}:${pull.updatedAt}`,
+                only: [who.userId],
+              });
+            }
+          });
+        }
+      } else if (event === "check_suite" || event === "check_run") {
+        // Los checks cambian el estado de PRs ya conocidos: se refrescan los de ese commit.
+        const sha =
+          (payload.check_suite as { head_sha?: string } | undefined)?.head_sha ?? (payload.check_run as { head_sha?: string } | undefined)?.head_sha;
         const { pulls } = await ctx.client.listPulls(repo.repoFullName, 1);
-        const sha = (payload.check_suite as { head_sha?: string } | undefined)?.head_sha;
         for (const pull of pulls.filter((x) => x.headSha === sha)) await syncPull(ctx, pull, { details: true });
       }
       return { ok: true };

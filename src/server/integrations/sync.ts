@@ -8,6 +8,7 @@ import { logger } from "../core/logger";
 import { withSystem, type Tx } from "../db/client";
 import {
   boardRepos,
+  cardAssignees,
   cardDevRefs,
   cardIssueLinks,
   cardLabels,
@@ -19,7 +20,7 @@ import {
   type BoardRepoSettings,
   type Priority,
 } from "../db/schema";
-import { COLORS } from "../modules/shared";
+import { COLORS, notify } from "../modules/shared";
 import { sanitizeRichText } from "../modules/richtext";
 import { GitHubClient } from "./github";
 import { docToMarkdown, markdownToDoc } from "./markdown";
@@ -284,6 +285,36 @@ export async function reconcileIssue(ctx: RepoContext, issue: RemoteIssue, opts:
   });
 }
 
+/**
+ * Vincula una tarjeta con un issue que ya existe. Si el contenido coincide quedan sincronizados;
+ * si difiere, no se pisa ninguno de los dos lados: queda un conflicto para que lo resuelva una persona.
+ */
+export async function linkExistingIssue(ctx: RepoContext, cardId: string, issue: RemoteIssue) {
+  await withSystem(async (tx) => {
+    await tx.insert(cardIssueLinks).values({
+      cardId,
+      orgId: ctx.repo.orgId,
+      boardRepoId: ctx.repo.id,
+      issueNumber: issue.number,
+      issueId: issue.id,
+      htmlUrl: issue.htmlUrl,
+      remoteState: issue.state,
+      remoteUpdatedAt: new Date(issue.updatedAt),
+    });
+    const local = await localFields(tx, ctx.repo, cardId);
+    const remote = remoteFields(issue);
+    if (local && fingerprint(local) === fingerprint(remote)) return storeSynced(tx, ctx, cardId, issue);
+    await tx
+      .update(cardIssueLinks)
+      .set({
+        syncedHash: `${local ? fingerprint(local) : ""}:${fingerprint(remote)}`,
+        syncedAt: new Date(),
+        conflict: { remote, detectedAt: new Date().toISOString() },
+      })
+      .where(eq(cardIssueLinks.cardId, cardId));
+  });
+}
+
 /** Envía al proveedor los cambios locales de una tarjeta vinculada. */
 export async function pushCard(cardId: string, opts: { force?: boolean } = {}) {
   const prepared = await withSystem(async (tx) => {
@@ -386,16 +417,26 @@ export async function resolveConflict(cardId: string, keep: "local" | "remote") 
 }
 
 /** Actualiza las referencias de desarrollo (PR, checks, revisión) de las tarjetas que menciona un PR. */
-export async function syncPull(ctx: RepoContext, pull: RemotePull, opts: { details: boolean }) {
+/**
+ * Actualiza el estado de un PR en las tarjetas vinculadas: por referencia explícita a un
+ * issue vinculado ("#12" o rama "12-algo") o por vínculo manual. Nunca por coincidencias de título.
+ * Descarta eventos más viejos que lo guardado (llegadas fuera de orden).
+ */
+export async function syncPull(ctx: RepoContext, pull: RemotePull, opts: { details: boolean }): Promise<boolean> {
   const numbers = referencedIssues(pull);
-  if (numbers.length === 0) return;
-  const linked = await withSystem((tx) =>
-    tx
-      .select({ cardId: cardIssueLinks.cardId })
-      .from(cardIssueLinks)
-      .where(and(eq(cardIssueLinks.boardRepoId, ctx.repo.id), inArray(cardIssueLinks.issueNumber, numbers))),
-  );
-  if (linked.length === 0) return;
+  const linked = await withSystem(async (tx) => {
+    const byIssue = numbers.length
+      ? await tx
+          .select({ cardId: cardIssueLinks.cardId })
+          .from(cardIssueLinks)
+          .where(and(eq(cardIssueLinks.boardRepoId, ctx.repo.id), inArray(cardIssueLinks.issueNumber, numbers)))
+      : [];
+    const manual = await tx.execute<{ card_id: string }>(sql`
+      select d.card_id from app.card_dev_refs d join app.cards c on c.id = d.card_id
+      where c.board_id = ${ctx.repo.boardId} and d.kind = 'pr' and d.external_id = ${String(pull.number)} and d.linked_manually`);
+    return [...new Set([...byIssue.map((r) => r.cardId), ...manual.map((r) => r.card_id)])];
+  });
+  if (linked.length === 0) return false;
   let checks: string | null = null;
   let review: string | null = null;
   if (opts.details) {
@@ -405,7 +446,12 @@ export async function syncPull(ctx: RepoContext, pull: RemotePull, opts: { detai
     ]);
   }
   await withSystem(async (tx) => {
-    for (const { cardId } of linked) {
+    for (const cardId of linked) {
+      const [prev] = await tx
+        .select()
+        .from(cardDevRefs)
+        .where(and(eq(cardDevRefs.cardId, cardId), eq(cardDevRefs.kind, "pr"), eq(cardDevRefs.externalId, String(pull.number))));
+      if (prev?.remoteUpdatedAt && prev.remoteUpdatedAt > new Date(pull.updatedAt)) continue; // evento viejo
       const values = {
         title: pull.title.slice(0, 300),
         state: pull.merged ? "merged" : pull.state,
@@ -421,7 +467,38 @@ export async function syncPull(ctx: RepoContext, pull: RemotePull, opts: { detai
         .insert(cardDevRefs)
         .values({ id: uuidv7(), orgId: ctx.repo.orgId, cardId, kind: "pr", externalId: String(pull.number), ...values })
         .onConflictDoUpdate({ target: [cardDevRefs.cardId, cardDevRefs.kind, cardDevRefs.externalId], set: values });
+      if (opts.details && checks === "failure" && prev?.checksStatus !== "failure") {
+        await notifyCardPeople(tx, cardId, {
+          type: "ci.failed",
+          data: { number: pull.number, prTitle: pull.title.slice(0, 200), url: pull.htmlUrl },
+          dedupeKey: `ci:${cardId}:${pull.number}:${pull.headSha}`,
+        });
+      }
     }
+  });
+  return opts.details;
+}
+
+/** Avisa al responsable y colaboradores de una tarjeta (eventos de GitHub, sin actor local). */
+export async function notifyCardPeople(
+  tx: Tx,
+  cardId: string,
+  input: { type: "ci.failed" | "pr.review_requested"; data: Record<string, unknown>; dedupeKey: string; only?: string[] },
+) {
+  const [card] = await tx.select().from(cards).where(eq(cards.id, cardId));
+  if (!card) return;
+  const people = new Set((await tx.select({ userId: cardAssignees.userId }).from(cardAssignees).where(eq(cardAssignees.cardId, cardId))).map((a) => a.userId));
+  if (card.ownerId) people.add(card.ownerId);
+  const recipients = input.only ? input.only : [...people];
+  await notify(tx, {
+    orgId: card.orgId,
+    userIds: recipients,
+    actorId: null,
+    type: input.type,
+    boardId: card.boardId,
+    cardId,
+    data: { ...input.data, cardTitle: card.title },
+    dedupeKey: input.dedupeKey,
   });
 }
 
@@ -451,9 +528,8 @@ export async function syncRepo(boardRepoId: string, opts: { full?: boolean } = {
       const { pulls, hasMore } = await ctx.client.listPulls(ctx.repo.repoFullName, page);
       for (const pull of pulls) {
         if (since && new Date(pull.updatedAt) < new Date(since)) break outer;
-        const details = detailCalls < 15 && referencedIssues(pull).length > 0;
-        if (details) detailCalls++;
-        await syncPull(ctx, pull, { details });
+        // Revisión y checks (2 llamadas) solo para PR vinculados, con tope por sincronización.
+        if ((await syncPull(ctx, pull, { details: detailCalls < 15 })) && detailCalls < 15) detailCalls++;
       }
       if (!hasMore) break;
     }

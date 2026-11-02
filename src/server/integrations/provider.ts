@@ -40,6 +40,7 @@ export interface VcsClient {
   createIssue(repo: string, input: Required<Pick<IssueInput, "title">> & IssueInput): Promise<RemoteIssue>;
   updateIssue(repo: string, number: number, input: IssueInput): Promise<RemoteIssue>;
   listPulls(repo: string, page: number): Promise<{ pulls: RemotePull[]; hasMore: boolean }>;
+  getPull(repo: string, number: number): Promise<RemotePull>;
   checksStatus(repo: string, sha: string): Promise<"success" | "failure" | "pending" | null>;
   reviewStatus(repo: string, number: number): Promise<"approved" | "changes_requested" | "commented" | null>;
   createWebhook(repo: string, url: string, secret: string): Promise<number>;

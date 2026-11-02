@@ -30,6 +30,7 @@ import { copyFieldValues, fieldValueText, fieldValuesByCard } from "./fields";
 import { sanitizeRichText } from "./richtext";
 import { COLORS, logActivity, notify, type NotificationType } from "./shared";
 import { BUILTIN_TEMPLATES, copyBoardContents } from "./templates";
+import { evaluateCompletion } from "./delivery";
 
 type Board = typeof boards.$inferSelect;
 type Card = typeof cards.$inferSelect;
@@ -291,8 +292,9 @@ export const planningRoutes = [
         if (body.decision === "reject" && !body.note) throw badRequest("Contá qué hay que corregir");
         const approved = body.decision === "approve";
         const patch: Partial<Card> = { qaStatus: approved ? "approved" : "rejected", qaBy: me.id, qaAt: new Date(), qaNote: body.note ?? null };
-        // Al aprobar, la tarea pasa a terminado.
-        if (approved && board.doneListId) {
+        // Al aprobar, la tarea pasa a terminado si se cumplen las demás reglas de cierre.
+        const pending = approved ? (await evaluateCompletion(tx, board, { ...card, qaStatus: "approved" })).filter((r) => !r.ok && r.level === "block") : [];
+        if (approved && board.doneListId && pending.length === 0) {
           patch.listId = board.doneListId;
           patch.position = await positionAfter(tx, "cards", board.doneListId, undefined, card.id);
           patch.completedAt = new Date();
@@ -317,8 +319,9 @@ export const planningRoutes = [
           cardId: card.id,
           data: { cardTitle: card.title, boardName: board.name, note: body.note },
         });
-        if (approved) await spawnRecurrence(tx, { ...card, ...patch } as Card, me.id);
-        return { status: patch.qaStatus };
+        if (approved && patch.completedAt) await spawnRecurrence(tx, { ...card, ...patch } as Card, me.id);
+        // Si quedan reglas bloqueantes, la aprobación se registra pero la tarea no se cierra todavía.
+        return { status: patch.qaStatus, completed: !!patch.completedAt, pending: pending.map((r) => ({ rule: r.key, detail: r.detail })) };
       }),
   }),
 

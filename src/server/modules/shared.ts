@@ -1,4 +1,5 @@
 import "server-only";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { uuidv7 } from "../core/ids";
 import type { Tx } from "../db/client";
@@ -35,7 +36,26 @@ export type NotificationType =
   | "qa.requested"
   | "qa.approved"
   | "qa.rejected"
-  | "board.added";
+  | "board.added"
+  | "card.blocked"
+  | "dependency.resolved"
+  | "pr.review_requested"
+  | "ci.failed"
+  | "sprint.risk";
+
+/** Avisos que cada persona puede silenciar (los de asignación y menciones siempre llegan). */
+export const MUTABLE_NOTIFICATIONS: NotificationType[] = [
+  "comment.created",
+  "card.moved",
+  "card.completed",
+  "card.due_soon",
+  "card.blocked",
+  "dependency.resolved",
+  "pr.review_requested",
+  "ci.failed",
+  "qa.requested",
+  "sprint.risk",
+];
 
 /** Crea notificaciones internas (nunca para el propio actor). Sin RETURNING: RLS solo deja leer las propias. */
 export async function notify(
@@ -48,11 +68,23 @@ export async function notify(
     boardId?: string;
     cardId?: string;
     data: Record<string, unknown>;
+    /** Evita avisar dos veces lo mismo a la misma persona (p. ej. el mismo check fallido). */
+    dedupeKey?: string;
   },
 ) {
-  const recipients = [...new Set(input.userIds)].filter((id) => id !== input.actorId);
+  let recipients = [...new Set(input.userIds)].filter((id) => id !== input.actorId);
   if (recipients.length === 0) return;
-  await tx.insert(notifications).values(
+  if (MUTABLE_NOTIFICATIONS.includes(input.type)) {
+    const muted = await tx.execute<{ id: string }>(
+      sql`select app.muted_recipients(${input.type}, ${sql`array[${sql.join(recipients.map((r) => sql`${r}::uuid`), sql`, `)}]`}) as id`,
+    );
+    const skip = new Set(muted.map((m) => m.id));
+    recipients = recipients.filter((id) => !skip.has(id));
+    if (recipients.length === 0) return;
+  }
+  await tx
+    .insert(notifications)
+    .values(
     recipients.map((userId) => ({
       id: uuidv7(),
       orgId: input.orgId,
@@ -62,6 +94,8 @@ export async function notify(
       boardId: input.boardId,
       cardId: input.cardId,
       data: input.data,
+      dedupeKey: input.dedupeKey ?? null,
     })),
-  );
+    )
+    .onConflictDoNothing();
 }

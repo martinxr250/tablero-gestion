@@ -107,21 +107,11 @@ export class GitHubClient implements VcsClient {
 
   async listPulls(repo: string, page: number) {
     const r = await this.req<GhPull[]>("GET", `/repos/${this.repo(repo)}/pulls?state=all&sort=updated&direction=desc&per_page=50&page=${page}`);
-    const pulls: RemotePull[] = r.data.map((p) => ({
-      id: p.id,
-      number: p.number,
-      title: p.title,
-      body: p.body ?? "",
-      state: p.state,
-      merged: !!p.merged_at,
-      draft: !!p.draft,
-      htmlUrl: p.html_url,
-      author: p.user?.login ?? null,
-      branch: p.head.ref,
-      headSha: p.head.sha,
-      updatedAt: p.updated_at,
-    }));
-    return { pulls, hasMore: r.hasMore };
+    return { pulls: r.data.map(toPull), hasMore: r.hasMore };
+  }
+
+  async getPull(repo: string, number: number) {
+    return toPull((await this.req<GhPull>("GET", `/repos/${this.repo(repo)}/pulls/${number}`)).data);
   }
 
   async checksStatus(repo: string, sha: string) {
@@ -155,4 +145,21 @@ export class GitHubClient implements VcsClient {
   async deleteWebhook(repo: string, id: number) {
     await this.req("DELETE", `/repos/${this.repo(repo)}/hooks/${id}`);
   }
+}
+
+function toPull(p: GhPull): RemotePull {
+  return {
+    id: p.id,
+    number: p.number,
+    title: p.title,
+    body: p.body ?? "",
+    state: p.state,
+    merged: !!p.merged_at,
+    draft: !!p.draft,
+    htmlUrl: p.html_url,
+    author: p.user?.login ?? null,
+    branch: p.head.ref,
+    headSha: p.head.sha,
+    updatedAt: p.updated_at,
+  };
 }

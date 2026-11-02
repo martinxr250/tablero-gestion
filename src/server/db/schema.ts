@@ -118,6 +118,7 @@ export const boards = app.table("boards", {
   qaListId: uuid("qa_list_id"),
   doneListId: uuid("done_list_id"),
   isTemplate: boolean("is_template").notNull().default(false),
+  completionRules: jsonb("completion_rules").$type<CompletionRules>().notNull().default({}),
   createdBy: uuid("created_by"),
   createdAt: ts("created_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
@@ -283,6 +284,7 @@ export const notifications = app.table("notifications", {
   boardId: uuid("board_id"),
   cardId: uuid("card_id"),
   data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+  dedupeKey: text("dedupe_key"),
   readAt: ts("read_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
@@ -425,6 +427,7 @@ export const cardDevRefs = app.table("card_dev_refs", {
   checksStatus: text("checks_status"),
   reviewStatus: text("review_status"),
   remoteUpdatedAt: ts("remote_updated_at"),
+  linkedManually: boolean("linked_manually").notNull().default(false),
 });
 
 export const vcsUserLinks = app.table(
@@ -529,4 +532,25 @@ export const cardMirrors = app.table("card_mirrors", {
   position: text("position").notNull(),
   createdBy: uuid("created_by"),
   createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export type RuleLevel = "off" | "warn" | "block";
+export type CompletionRules = Partial<Record<"subtasks" | "dependencies" | "checklists" | "prApproved" | "ciPassing" | "prMerged", RuleLevel>>;
+
+export const boardCapacity = app.table(
+  "board_capacity",
+  {
+    orgId: uuid("org_id").notNull(),
+    boardId: uuid("board_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    points: numeric("points", { precision: 6, scale: 1, mode: "number" }).notNull(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.boardId, t.userId] })],
+);
+
+export const notificationSettings = app.table("notification_settings", {
+  userId: uuid("user_id").primaryKey(),
+  muted: text("muted").array().notNull().default([]),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
 });
