@@ -207,8 +207,13 @@ export const cardRoutes = [
     handler: async ({ me, params, body, audit: actx }) => {
       const result = await withUser(me.id, async (tx) => {
         const { card, board } = await cardAccess(tx, actx, params.cardId, "edit");
-        if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== card.updatedAt.getTime()) {
-          throw conflict("Otra persona modificó esta tarjeta. Recargá para ver los cambios.", "stale_update");
+        if (body.expectedUpdatedAt) {
+          // Se bloquea la fila antes de comparar: dos ediciones simultáneas con la misma versión
+          // no pueden pasar las dos (la segunda espera y ve la versión nueva).
+          const [locked] = await tx.select({ updatedAt: cards.updatedAt }).from(cards).where(eq(cards.id, card.id)).for("update");
+          if (!locked || new Date(body.expectedUpdatedAt).getTime() !== locked.updatedAt.getTime()) {
+            throw conflict("Otra persona modificó esta tarjeta. Recargá para ver los cambios.", "stale_update");
+          }
         }
         const patch: Partial<typeof cards.$inferInsert> = {};
         const changed: string[] = [];
