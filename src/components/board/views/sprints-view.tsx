@@ -50,7 +50,8 @@ export function SprintsView({ data, canEdit, onOpenCard }: { data: BoardData; ca
   });
   const remove = useMutation({ mutationFn: (id: string) => api(`/sprints/${id}`, { method: "DELETE" }), onSettled: refresh });
 
-  const open = data.cards.filter((c) => !c.completedAt);
+  // Los espejos se planifican en su tablero original.
+  const open = data.cards.filter((c) => !c.completedAt && !c.mirror);
   const backlog = open.filter((c) => !c.sprintId);
   const visibleSprints = data.sprints.filter((s) => s.status !== "closed");
   const closed = data.sprints.filter((s) => s.status === "closed");

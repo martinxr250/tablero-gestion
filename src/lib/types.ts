@@ -55,6 +55,8 @@ export type CardSummary = {
   subtaskDone: number;
   blocked: boolean;
   fieldValues: Record<string, FieldValue>;
+  /** Presente si es un espejo de una tarjeta de otro tablero (id = id del espejo). */
+  mirror?: { cardId: string; boardId: string; boardName: string };
 };
 
 export type QaStatus = "none" | "pending" | "approved" | "rejected";
@@ -93,6 +95,8 @@ export type BoardData = {
   cards: CardSummary[];
   labels: Label[];
   fields: BoardField[];
+  /** Etiquetas, personas y campos de los tableros originales de los espejos. */
+  external: { labels: Label[]; people: Person[]; fields: BoardField[] };
   people: Person[];
   cursor: number;
 };
@@ -123,6 +127,7 @@ export type CardDetail = {
   recurrence: "weekly" | "monthly" | null;
   qa: { status: QaStatus; by: string | null; at: string | null; note: string | null };
   fieldValues: Record<string, FieldValue>;
+  mirrors: { id: string; boardId: string; boardName: string; listName: string }[];
   watcherCount: number;
   watching: boolean;
   relations: { cardId: string; title: string; boardId: string; boardName: string; type: string; direction: "in" | "out"; completed: boolean }[];

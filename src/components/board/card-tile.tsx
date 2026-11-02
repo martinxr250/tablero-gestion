@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Calendar, CheckCircle2, CheckSquare, CircleDot, CornerDownRight, Flag, ListTree, MessageSquare, Paperclip, Repeat, ShieldCheck, Tag } from "lucide-react";
+import { Ban, Calendar, Copy, CheckCircle2, CheckSquare, CircleDot, CornerDownRight, Flag, ListTree, MessageSquare, Paperclip, Repeat, ShieldCheck, Tag } from "lucide-react";
 import { createContext, useContext } from "react";
 import { Avatar } from "@/components/ui/user-avatar";
 import { asColor, CHIP, PRIORITY } from "@/lib/colors";
@@ -81,6 +81,11 @@ export function CardTile({
               </span>
             )}
           </div>
+        )}
+        {card.mirror && (
+          <p className="mb-1 flex items-center gap-1 truncate text-[11px] text-primary" title={`Tarjeta de ${card.mirror.boardName}`}>
+            <Copy className="size-3 shrink-0" aria-hidden /> Espejo de {card.mirror.boardName}
+          </p>
         )}
         {card.parentId && (
           <p className="mb-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">

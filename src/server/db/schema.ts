@@ -519,3 +519,14 @@ export const inboxItems = app.table("inbox_items", {
   doneAt: ts("done_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+export const cardMirrors = app.table("card_mirrors", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  cardId: uuid("card_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  listId: uuid("list_id").notNull(),
+  position: text("position").notNull(),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});

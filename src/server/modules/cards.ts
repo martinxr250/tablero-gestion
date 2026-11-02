@@ -31,6 +31,7 @@ import { richTextInput, sanitizeRichText } from "./richtext";
 import { logActivity, notify } from "./shared";
 import { schedulePush } from "../integrations/sync";
 import { assertCanComplete, assertSprintInBoard, assertValidParent, notifyWatchers, qaOnMove, spawnRecurrence } from "./planning";
+import { cardMirrorList } from "./mirrors";
 
 const title = z.string().trim().min(1, "Ingresá un título").max(200);
 const priority = z.enum(["none", "low", "medium", "high", "urgent"]);
@@ -128,6 +129,7 @@ async function cardDetail(tx: Tx, cardId: string, viewerId?: string) {
     recurrence: card.recurrence,
     qa: { status: card.qaStatus, by: qaReviewer[0]?.name ?? null, at: card.qaAt, note: card.qaNote },
     fieldValues: Object.fromEntries((await tx.select().from(cardFieldValues).where(eq(cardFieldValues.cardId, card.id))).map((v) => [v.fieldId, v.value])),
+    mirrors: (await cardMirrorList(tx, card.id)).map((m) => ({ id: m.id, boardId: m.board_id, boardName: m.board_name, listName: m.list_name })),
     watcherCount: watchers.length,
     watching: viewerId ? watchers.some((w) => w.userId === viewerId) : false,
     relations: relationRows.map((r) => ({

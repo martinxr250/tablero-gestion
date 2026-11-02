@@ -47,6 +47,10 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "card.recurred": return `programó la próxima "${t}"`;
     case "card.duplicated": return `duplicó "${t}"`;
     case "card.subtask_created": return `agregó la subtarea "${t}" a "${s(d.parent)}"`;
+    case "card.mirrored": return `espejó "${t}" en ${s(d.to)}`;
+    case "card.mirror_added": return "agregó una tarjeta espejo";
+    case "card.mirror_moved": return `movió una tarjeta espejo a ${s(d.to)}`;
+    case "card.mirror_removed": return "quitó una tarjeta espejo";
     case "field.created": return `creó el campo "${s(d.name)}"`;
     case "field.deleted": return `eliminó el campo "${s(d.name)}"`;
     case "card.field_set": return d.value ? `puso ${s(d.field)} = "${s(d.value)}" en "${t}"` : `borró ${s(d.field)} en "${t}"`;

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 import {
-  Archive, ArrowRightLeft, Calendar, CheckCircle2, CheckSquare, Circle, Download, Flag, History, Link2, MessageSquare,
+  Archive, ArrowRightLeft, Copy, Calendar, CheckCircle2, CheckSquare, Circle, Download, Flag, History, Link2, MessageSquare,
   Paperclip, Plus, RotateCcw, Tag, Trash2, Upload, UserRound, Users, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,28 +30,34 @@ const RELATION_LABEL: Record<string, { out: string; in: string }> = {
   duplicates: { out: "Duplica a", in: "Duplicada por" },
 };
 
-export function CardModal({ cardId, board, onClose, onOpenCard }: { cardId: string; board: BoardData; onClose: () => void; onOpenCard: (id: string) => void }) {
+export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { cardId: string; board: BoardData; onClose: () => void; onOpenCard: (id: string) => void }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["card", cardId], queryFn: () => api<{ card: CardDetail; role: BoardRole }>(`/cards/${cardId}`) });
   const card = q.data?.card;
+  // Abierta desde un espejo: listas, etiquetas y personas son las del tablero original.
+  const isMirror = !!card && card.boardId !== viewBoard.board.id;
+  const source = useQuery({ queryKey: ["board", card?.boardId], queryFn: () => api<BoardData>(`/boards/${card!.boardId}`), enabled: isMirror });
+  const board = (isMirror ? source.data : viewBoard) ?? viewBoard;
+  const loadingSource = isMirror && !source.data;
   const canEdit = (q.data?.role === "editor" || q.data?.role === "admin") && !board.board.archivedAt;
   const canComment = canEdit || (q.data?.role === "commenter" && !board.board.archivedAt);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["card", cardId] });
-    qc.invalidateQueries({ queryKey: ["board", board.board.id] });
+    // También los tableros donde la tarjeta está espejada.
+    qc.invalidateQueries({ queryKey: ["board"] });
   };
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) => api<{ card: CardDetail }>(`/cards/${cardId}`, { method: "PATCH", body }),
     onSuccess: (r) => qc.setQueryData(["card", cardId], (old: { card: CardDetail; role: BoardRole } | undefined) => (old ? { ...old, card: r.card } : old)),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["board", board.board.id] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["board"] }),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} wide title={card ? <CardTitle key={card.title} card={card} canEdit={canEdit} onSave={(title) => patch.mutate({ title })} /> : "Cargando…"}>
       {q.error ? (
         <p className="text-sm text-destructive">{q.error instanceof ApiError && q.error.status === 404 ? "La tarjeta no existe o no tenés acceso." : (q.error as Error).message}</p>
-      ) : !card ? (
+      ) : !card || loadingSource ? (
         <div className="space-y-3">
           <Skeleton className="h-6 w-1/3" />
           <Skeleton className="h-32" />
@@ -66,6 +72,15 @@ export function CardModal({ cardId, board, onClose, onOpenCard }: { cardId: stri
             {card.archivedAt && (
               <div className="rounded-xl bg-amber-100 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/15 dark:text-amber-100">
                 Esta tarjeta está archivada.
+              </div>
+            )}
+            {isMirror && (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-primary-soft px-4 py-2.5 text-sm text-primary">
+                <Copy className="size-4" /> Estás viendo un espejo. La tarjeta pertenece a
+                <Link href={`/b/${board.board.id}?card=${card.id}`} className="font-semibold underline-offset-2 hover:underline">
+                  {board.board.name}
+                </Link>
+                y los cambios se ven en todos los tableros.
               </div>
             )}
             <CardBanners card={card} onOpenCard={onOpenCard} />

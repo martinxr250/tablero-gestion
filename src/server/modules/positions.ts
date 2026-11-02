@@ -11,6 +11,7 @@ const SCOPES = {
   checklists: "card_id",
   checklist_items: "checklist_id",
   board_fields: "board_id",
+  card_mirrors: "list_id",
 } as const;
 
 export type PositionTable = keyof typeof SCOPES;
@@ -26,7 +27,11 @@ export async function positionAfter(
   afterId: string | null | undefined,
   excludeId?: string,
 ): Promise<string> {
-  const t = sql`${sql.identifier("app")}.${sql.identifier(table)}`;
+  // Tarjetas y espejos comparten el orden dentro de cada lista.
+  const t =
+    table === "cards" || table === "card_mirrors"
+      ? sql`(select id, list_id, position from app.cards union all select id, list_id, position from app.card_mirrors) as ordered`
+      : sql`${sql.identifier("app")}.${sql.identifier(table)}`;
   const scope = sql.identifier(SCOPES[table]);
   const exclude = excludeId ? sql`and id <> ${excludeId}` : sql``;
 

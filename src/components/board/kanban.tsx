@@ -50,8 +50,10 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
   const origin = useRef<{ list: string; index: number } | null>(null);
 
   const cardsById = useMemo(() => new Map(data.cards.map((c) => [c.id, c])), [data.cards]);
-  const labels = useMemo(() => new Map<string, Label>(data.labels.map((l) => [l.id, l])), [data.labels]);
-  const people = useMemo(() => new Map<string, Person>(data.people.map((p) => [p.userId, p])), [data.people]);
+  // Los espejos usan etiquetas y personas de su tablero original.
+  const labels = useMemo(() => new Map<string, Label>([...data.external.labels, ...data.labels].map((l) => [l.id, l])), [data.labels, data.external]);
+  const people = useMemo(() => new Map<string, Person>([...data.external.people, ...data.people].map((p) => [p.userId, p])), [data.people, data.external]);
+  const tileFields = useMemo(() => [...data.fields, ...data.external.fields], [data.fields, data.external]);
   const listsById = useMemo(() => new Map(data.lists.map((l) => [l.id, l])), [data.lists]);
 
   const syncFromData = useCallback(() => {
@@ -67,7 +69,10 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
 
   const moveCard = useMutation({
     mutationFn: (v: { cardId: string; listId: string; afterCardId: string | null }) =>
-      api(`/cards/${v.cardId}/move`, { method: "POST", body: { listId: v.listId, afterCardId: v.afterCardId } }),
+      api(cardsById.get(v.cardId)?.mirror ? `/mirrors/${v.cardId}/move` : `/cards/${v.cardId}/move`, {
+        method: "POST",
+        body: { listId: v.listId, afterCardId: v.afterCardId },
+      }),
     onError: () => syncFromData(),
     onSettled: () => qc.invalidateQueries({ queryKey: boardKey }),
   });
@@ -159,7 +164,7 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
   const dndEnabled = canEdit && !filtering;
 
   return (
-    <CardFieldsContext value={data.fields}>
+    <CardFieldsContext value={tileFields}>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}

@@ -173,10 +173,12 @@ export function BoardView({ boardId }: { boardId: string }) {
 
   const openCard = useCallback((id: string | null) => {
     const sp = new URLSearchParams(params.toString());
-    if (id) sp.set("card", id);
+    // Un espejo abre la tarjeta original.
+    const target = id ? (q.data?.cards.find((c) => c.id === id)?.mirror?.cardId ?? id) : null;
+    if (target) sp.set("card", target);
     else sp.delete("card");
     router.replace(`${pathname}${sp.size ? `?${sp}` : ""}`, { scroll: false });
-  }, [params, pathname, router]);
+  }, [params, pathname, router, q.data]);
 
   const filtering = Object.values(filters).some(Boolean);
   const visible = useMemo(() => {

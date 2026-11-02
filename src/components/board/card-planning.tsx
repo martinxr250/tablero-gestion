@@ -1,15 +1,16 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Ban, Bell, BellOff, CheckCircle2, Copy, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ban, Bell, BellOff, CheckCircle2, Copy, Layers, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
 import { Avatar } from "@/components/ui/user-avatar";
 import { Button, Input, Select, Textarea } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
-import type { BoardData, CardDetail } from "@/lib/types";
+import type { BoardData, CardDetail, WorkspaceTree } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Patch = (b: Record<string, unknown>) => void;
@@ -289,6 +290,100 @@ export function PlanningSidebar({ card, board, canEdit, patch, onOpenCard }: { c
           <Copy /> Duplicar
         </Button>
       )}
+      <MirrorControls card={card} board={board} />
     </>
+  );
+}
+
+/** Espejar la tarjeta en otros tableros de la organización y ver dónde está espejada. */
+export function MirrorControls({ card, board }: { card: CardDetail; board: BoardData }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [boardId, setBoardId] = useState("");
+  const [listId, setListId] = useState("");
+  const tree = useQuery({ queryKey: ["workspaces", board.board.orgId], queryFn: () => api<WorkspaceTree>(`/orgs/${board.board.orgId}/workspaces`), enabled: open });
+  const target = useQuery({ queryKey: ["board", boardId], queryFn: () => api<BoardData>(`/boards/${boardId}`), enabled: !!boardId });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["card", card.id] });
+    qc.invalidateQueries({ queryKey: ["board"] });
+  };
+  const add = useMutation({
+    mutationFn: () => api(`/cards/${card.id}/mirrors`, { method: "POST", body: { boardId, listId: listId || undefined } }),
+    onSuccess: () => {
+      toast.success("Tarjeta espejada");
+      setOpen(false);
+      setBoardId("");
+      setListId("");
+    },
+    onSettled: refresh,
+  });
+  const remove = useMutation({ mutationFn: (id: string) => api(`/mirrors/${id}`, { method: "DELETE" }), onSettled: refresh });
+  const taken = new Set([card.boardId, ...card.mirrors.map((m) => m.boardId)]);
+  const canTarget = target.data && (target.data.role === "editor" || target.data.role === "admin") && !target.data.board.archivedAt;
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Layers className="h-3.5 w-3.5" /> Espejos
+      </p>
+      {card.mirrors.length > 0 && (
+        <ul className="space-y-1">
+          {card.mirrors.map((m) => (
+            <li key={m.id} className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2 py-1 text-xs">
+              <span className="min-w-0 flex-1 truncate" title={`${m.boardName} · ${m.listName}`}>
+                {m.boardName} <span className="text-muted-foreground">· {m.listName}</span>
+              </span>
+              <button aria-label={`Quitar el espejo de ${m.boardName}`} className="rounded p-0.5 text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(m.id)}>
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="secondary" className="w-full justify-start" disabled={!!card.archivedAt}>
+            <Copy /> Espejar en otro tablero
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-3">
+          <p className="text-sm font-semibold">Espejar tarjeta</p>
+          <p className="text-xs text-muted-foreground">La misma tarea aparece en otro tablero con la información sincronizada. Solo la ven quienes tienen acceso a este tablero.</p>
+          <Select
+            aria-label="Tablero de destino"
+            value={boardId}
+            onChange={(e) => {
+              setBoardId(e.target.value);
+              setListId("");
+            }}
+          >
+            <option value="">Elegí un tablero…</option>
+            {tree.data?.workspaces.map((w) => (
+              <optgroup key={w.id} label={w.name}>
+                {w.boards
+                  .filter((b) => !taken.has(b.id))
+                  .map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </Select>
+          {target.data && (
+            <Select aria-label="Lista de destino" value={listId || target.data.lists[0]?.id || ""} onChange={(e) => setListId(e.target.value)}>
+              {target.data.lists.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          {target.data && !canTarget && <p className="text-xs text-destructive">No tenés permiso para agregar tarjetas en ese tablero.</p>}
+          <Button className="w-full" size="sm" disabled={!canTarget} loading={add.isPending} onClick={() => add.mutate()}>
+            Espejar
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }

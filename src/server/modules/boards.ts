@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { route } from "../api/router";
 import { audit } from "../core/audit";
@@ -10,6 +10,7 @@ import { activityLogs, boardMembers, boards, cards, labels, lists, organizationM
 import { applyTemplate, templateSchema } from "./templates";
 import { sendMail } from "../email/mailer";
 import { listBoardFields } from "./fields";
+import { boardMirrors } from "./mirrors";
 import { boardAccess, workspaceAccess } from "./access";
 import { emailSchema } from "./auth";
 import { createInvitation } from "./orgs";
@@ -59,6 +60,11 @@ type CardSummaryRow = {
 };
 
 export async function boardCards(tx: Tx, boardId: string, archived = false) {
+  return cardSummaries(tx, sql`c.board_id = ${boardId} and ${archived ? sql`c.archived_at is not null` : sql`c.archived_at is null`}`);
+}
+
+/** Resumen de tarjetas para el tablero (también para los espejos, que muestran tarjetas de otros tableros). */
+export async function cardSummaries(tx: Tx, where: SQL) {
   const rows = await tx.execute<CardSummaryRow>(sql`
     select c.id, c.list_id, c.title, c.priority, c.owner_id, c.due_at, c.completed_at, c.position, c.updated_at,
       (c.description_text <> '') as has_description,
@@ -82,7 +88,7 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
         where r.to_card_id = c.id and r.type = 'blocks' and b.completed_at is null and b.archived_at is null
       ) as blocked
     from app.cards c
-    where c.board_id = ${boardId} and ${archived ? sql`c.archived_at is not null` : sql`c.archived_at is null`}
+    where ${where}
     order by c.position, c.id`);
   return rows.map((r) => ({
     id: r.id,
@@ -189,6 +195,7 @@ export const boardRoutes = [
           tx.select().from(sprints).where(eq(sprints.boardId, board.id)).orderBy(asc(sprints.startsOn)),
         ]);
         const fields = await listBoardFields(tx, board.id);
+        const mirrors = await boardMirrors(tx, board.id);
         const meRow = people.find((p) => p.user_id === me.id);
         return {
           board: {
@@ -219,7 +226,8 @@ export const boardRoutes = [
             capacityPoints: sp.capacityPoints,
           })),
           lists: listRows.map((l) => ({ id: l.id, name: l.name, color: l.color, position: l.position })),
-          cards: cardRows,
+          cards: [...cardRows, ...mirrors.cards].sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0)),
+          external: mirrors.external,
           labels: labelRows.map((l) => ({ id: l.id, name: l.name, color: l.color })),
           fields,
           people: people.map((p) => ({ userId: p.user_id, name: p.name, email: p.email, hasAvatar: p.has_avatar, role: p.role, canReview: p.can_review })),
@@ -436,7 +444,15 @@ export const boardRoutes = [
           })
           .from(activityLogs)
           .leftJoin(users, eq(users.id, activityLogs.actorId))
-          .where(and(eq(activityLogs.boardId, params.boardId), gt(activityLogs.id, query.after)))
+          .where(
+            and(
+              gt(activityLogs.id, query.after),
+              // También los cambios de tarjetas espejadas acá (si la persona ve el tablero original).
+              sql`(${activityLogs.boardId} = ${params.boardId} or ${activityLogs.cardId} in (
+                select m.card_id from app.card_mirrors m join app.cards c on c.id = m.card_id
+                join app.my_boards mb on mb.board_id = c.board_id where m.board_id = ${params.boardId}))`,
+            ),
+          )
           .orderBy(asc(activityLogs.id))
           .limit(100);
         return { cursor: rows.length ? rows[rows.length - 1]!.id : query.after, changes: rows };
