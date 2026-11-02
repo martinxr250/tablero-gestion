@@ -1,7 +1,9 @@
 import "server-only";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sql } from "drizzle-orm";
 import { env } from "../core/env";
+import { withSystem } from "../db/client";
 
 export interface ObjectStorage {
   put(key: string, data: Uint8Array, contentType: string): Promise<void>;
@@ -79,8 +81,29 @@ class SupabaseStorage implements ObjectStorage {
   }
 }
 
+/** Dentro de Postgres (tabla app.file_blobs): suficiente para equipos chicos y sin claves extra. */
+class DatabaseStorage implements ObjectStorage {
+  async put(key: string, data: Uint8Array, contentType: string) {
+    assertKey(key);
+    await withSystem((tx) => tx.execute(sql`insert into app.file_blobs (key, content_type, data) values (${key}, ${contentType}, ${Buffer.from(data)})`));
+  }
+  async get(key: string) {
+    assertKey(key);
+    const rows = await withSystem((tx) => tx.execute<{ data: Buffer }>(sql`select data from app.file_blobs where key = ${key}`));
+    const row = rows[0];
+    if (!row) throw new Error("Storage get falló (404)");
+    return new Uint8Array(row.data);
+  }
+  async remove(keys: string[]) {
+    if (keys.length === 0) return;
+    keys.forEach(assertKey);
+    await withSystem((tx) => tx.execute(sql`delete from app.file_blobs where key in (${sql.join(keys.map((k) => sql`${k}`), sql`, `)})`));
+  }
+}
+
 let instance: ObjectStorage | undefined;
 export function storage(): ObjectStorage {
-  instance ??= env().STORAGE_DRIVER === "supabase" ? new SupabaseStorage() : new LocalStorage();
+  const driver = env().STORAGE_DRIVER;
+  instance ??= driver === "supabase" ? new SupabaseStorage() : driver === "database" ? new DatabaseStorage() : new LocalStorage();
   return instance;
 }

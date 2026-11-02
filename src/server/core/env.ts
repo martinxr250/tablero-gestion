@@ -12,7 +12,7 @@ const schema = z
     ENCRYPTION_KEY: z.string().refine((v) => Buffer.from(v, "base64").length === 32, "Debe ser 32 bytes en base64"),
     IP_HASH_SECRET: z.string().min(32),
     CRON_SECRET: z.string().min(32).optional(),
-    STORAGE_DRIVER: z.enum(["supabase", "local"]).default("local"),
+    STORAGE_DRIVER: z.enum(["supabase", "database", "local"]).default("local"),
     SUPABASE_URL: z.url().optional(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     SUPABASE_BUCKET: z.string().default("faro-files"),
@@ -32,7 +32,7 @@ const schema = z
       ctx.addIssue({ code: "custom", message: "MAIL_DRIVER=smtp requiere SMTP_HOST, SMTP_USER y SMTP_PASS" });
     }
     if (e.NODE_ENV === "production") {
-      if (e.STORAGE_DRIVER !== "supabase") ctx.addIssue({ code: "custom", message: "En producción STORAGE_DRIVER debe ser supabase" });
+      if (e.STORAGE_DRIVER === "local") ctx.addIssue({ code: "custom", message: "En producción STORAGE_DRIVER debe ser supabase o database" });
       if (e.MAIL_DRIVER !== "smtp") ctx.addIssue({ code: "custom", message: "En producción MAIL_DRIVER debe ser smtp" });
       if (!e.CRON_SECRET) ctx.addIssue({ code: "custom", message: "En producción CRON_SECRET es obligatorio" });
       if (!e.APP_URL.startsWith("https://")) ctx.addIssue({ code: "custom", message: "En producción APP_URL debe ser https" });

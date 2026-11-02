@@ -13,6 +13,6 @@ Object.assign(process.env, {
   ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   IP_HASH_SECRET: randomBytes(32).toString("base64url"),
   CRON_SECRET: randomBytes(32).toString("base64url"),
-  STORAGE_DRIVER: "local",
+  STORAGE_DRIVER: process.env.TEST_STORAGE_DRIVER ?? "local",
   MAIL_DRIVER: "file",
 });
