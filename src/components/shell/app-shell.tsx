@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bell, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, LogOut, Menu as MenuIcon, Moon, Plus, Search, Settings, Sun,
+  Bell, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, LogOut, Menu as MenuIcon, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sun,
   UserRound, X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -23,6 +23,33 @@ import { OrgProvider, useOrg } from "./org-context";
 
 type ShellUser = { id: string; name: string; email: string; hasAvatar: boolean };
 
+// Preferencia "sidebar compacto" (solo escritorio), guardada en el navegador.
+const MINI_KEY = "tableros.sidebarMini";
+const MINI_EVENT = "tableros:sidebar";
+function subscribeMini(cb: () => void) {
+  window.addEventListener("storage", cb);
+  window.addEventListener(MINI_EVENT, cb);
+  return () => {
+    window.removeEventListener("storage", cb);
+    window.removeEventListener(MINI_EVENT, cb);
+  };
+}
+function readMini() {
+  try {
+    return localStorage.getItem(MINI_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function setMini(value: boolean) {
+  try {
+    localStorage.setItem(MINI_KEY, value ? "1" : "0");
+  } catch {
+    /* almacenamiento no disponible */
+  }
+  window.dispatchEvent(new Event(MINI_EVENT));
+}
+
 export function AppShell({ user, children }: { user: ShellUser; children: ReactNode }) {
   return (
     <OrgProvider>
@@ -34,6 +61,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: ReactN
 function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const mini = useSyncExternalStore(subscribeMini, readMini, () => false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
@@ -60,12 +88,13 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
       {navOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-transform lg:static lg:translate-x-0 lg:rounded-[1.75rem] lg:border",
+          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-[transform,width] lg:static lg:translate-x-0 lg:rounded-[1.75rem] lg:border",
           navOpen ? "translate-x-0" : "-translate-x-full",
+          mini && "lg:w-[4.75rem]",
         )}
         aria-label="Navegación principal"
       >
-        <Sidebar user={user} onClose={() => setNavOpen(false)} />
+        <Sidebar user={user} mini={mini} onClose={() => setNavOpen(false)} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:px-6 lg:px-2">
@@ -98,22 +127,25 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
   );
 }
 
-function NavLink({ href, icon: Icon, label, active }: { href: string; icon: typeof Search; label: string; active: boolean }) {
+function NavLink({ href, icon: Icon, label, active, mini }: { href: string; icon: typeof Search; label: string; active: boolean; mini: boolean }) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      aria-label={label}
+      title={mini ? label : undefined}
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/25 hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
+        mini && "lg:justify-center lg:px-0",
       )}
     >
-      <Icon className="size-[1.1rem]" /> {label}
+      <Icon className="size-[1.1rem] shrink-0" /> <span className={cn(mini && "lg:hidden")}>{label}</span>
     </Link>
   );
 }
 
-function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
+function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onClose: () => void }) {
   const { me, orgId, currentOrg, setOrgId } = useOrg();
   const pathname = usePathname();
   const router = useRouter();
@@ -134,10 +166,10 @@ function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-5 pt-5 pb-4">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <Logo className="size-9" />
-          <span className="leading-tight">
+      <div className={cn("flex items-center justify-between gap-2 px-5 pt-5 pb-4", mini && "lg:flex-col lg:px-0")}>
+        <Link href="/dashboard" className="flex items-center gap-2.5" aria-label="Tableros, inicio">
+          <Logo className="size-9 shrink-0" />
+          <span className={cn("leading-tight", mini && "lg:hidden")}>
             <span className="block text-lg font-bold tracking-tight text-foreground">Tableros</span>
             <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
           </span>
@@ -145,20 +177,52 @@ function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
         <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Cerrar menú" onClick={onClose}>
           <X />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="hidden text-muted-foreground lg:inline-flex"
+          aria-label={mini ? "Expandir menú lateral" : "Minimizar menú lateral"}
+          aria-pressed={mini}
+          title={mini ? "Expandir menú" : "Minimizar menú"}
+          onClick={() => setMini(!mini)}
+        >
+          {mini ? <PanelLeftOpen /> : <PanelLeftClose />}
+        </Button>
       </div>
 
       <nav className="space-y-1 px-3">
-        <NavLink href="/dashboard" icon={LayoutDashboard} label="Inicio" active={pathname === "/dashboard"} />
-        <NavLink href="/search" icon={Search} label="Búsqueda" active={pathname === "/search"} />
-        <NavLink href="/notifications" icon={Bell} label="Notificaciones" active={pathname === "/notifications"} />
+        <NavLink href="/dashboard" icon={LayoutDashboard} label="Inicio" mini={mini} active={pathname === "/dashboard"} />
+        <NavLink href="/search" icon={Search} label="Búsqueda" mini={mini} active={pathname === "/search"} />
+        <NavLink href="/notifications" icon={Bell} label="Notificaciones" mini={mini} active={pathname === "/notifications"} />
         {orgId && currentOrg?.role !== "guest" && (
-          <NavLink href={`/o/${orgId}/settings`} icon={Settings} label="Ajustes" active={pathname === `/o/${orgId}/settings`} />
+          <NavLink href={`/o/${orgId}/settings`} icon={Settings} label="Ajustes" mini={mini} active={pathname === `/o/${orgId}/settings`} />
         )}
       </nav>
 
-      <div className="mx-5 my-4 border-t" />
+      <div className={cn("mx-5 my-4 border-t", mini && "lg:mx-4")} />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      {mini && (
+        <ul className="hidden min-h-0 flex-1 flex-col items-center gap-1.5 overflow-y-auto pb-4 scroll-thin lg:flex" aria-label="Tableros">
+          {tree?.workspaces.flatMap((w) => w.boards).map((b) => (
+            <li key={b.id}>
+              <Link
+                href={`/b/${b.id}`}
+                title={b.name}
+                aria-label={b.name}
+                className={cn(
+                  "relative flex size-10 items-center justify-center rounded-xl text-sm font-bold hover:bg-sidebar-accent",
+                  pathname === `/b/${b.id}` && "bg-sidebar-accent text-sidebar-accent-foreground",
+                )}
+              >
+                {b.name.slice(0, 1).toUpperCase()}
+                <span className={cn("absolute right-1.5 bottom-1.5 size-2 rounded-full ring-2 ring-sidebar", SWATCH[asColor(b.color)])} aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className={cn("flex min-h-0 flex-1 flex-col", mini && "lg:hidden")}>
         <div className="flex items-center justify-between px-6 pb-2">
           <Link href={orgId ? `/o/${orgId}` : "/dashboard"} className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
             Espacios de trabajo
@@ -215,18 +279,22 @@ function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
         </div>
       </div>
 
-      <div className="m-3 overflow-hidden rounded-2xl border bg-card">
+      <div className={cn("m-3 overflow-hidden rounded-2xl border bg-card", mini && "lg:mx-2")}>
         <Menu>
           <MenuTrigger asChild>
-            <button className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary">
+            <button
+              className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted", mini && "lg:justify-center lg:px-0")}
+              aria-label={`Organización: ${currentOrg?.name ?? "sin organización"}`}
+              title={mini ? currentOrg?.name : undefined}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary">
                 {(currentOrg?.name ?? "?").slice(0, 1).toUpperCase()}
               </span>
-              <span className="min-w-0 flex-1">
+              <span className={cn("min-w-0 flex-1", mini && "lg:hidden")}>
                 <span className="block text-[11px] text-muted-foreground">Organización</span>
                 <span className="block truncate text-sm font-semibold text-foreground">{currentOrg?.name ?? "Sin organización"}</span>
               </span>
-              <ChevronsUpDown className="size-4 text-muted-foreground" />
+              <ChevronsUpDown className={cn("size-4 text-muted-foreground", mini && "lg:hidden")} />
             </button>
           </MenuTrigger>
           <MenuContent align="start" side="top" className="w-60">
@@ -249,12 +317,17 @@ function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
             </MenuItem>
           </MenuContent>
         </Menu>
-        <div className="flex items-center justify-between border-t px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-          <button onClick={logout} className="inline-flex items-center gap-1.5 hover:text-foreground">
-            <LogOut className="size-3.5" /> Salir
+        <div
+          className={cn(
+            "flex items-center justify-between border-t px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+            mini && "lg:flex-col lg:gap-2 lg:px-0",
+          )}
+        >
+          <button onClick={logout} className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Salir" title="Salir">
+            <LogOut className="size-3.5" /> <span className={cn(mini && "lg:hidden")}>Salir</span>
           </button>
-          <Link href="/settings" className="inline-flex items-center gap-1.5 hover:text-foreground" title={user.email}>
-            <UserRound className="size-3.5" /> Mi cuenta
+          <Link href="/settings" className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Mi cuenta" title={user.email}>
+            <UserRound className="size-3.5" /> <span className={cn(mini && "lg:hidden")}>Mi cuenta</span>
           </Link>
         </div>
       </div>
