@@ -278,7 +278,7 @@ function ListColumn({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("flex max-h-full w-[19rem] shrink-0 flex-col rounded-[2rem] border bg-card/70 shadow-card backdrop-blur-sm dark:bg-card", isDragging && "opacity-40")}
+      className={cn("flex max-h-full w-[19rem] shrink-0 flex-col rounded-[2rem] border pb-2 bg-card/70 shadow-card backdrop-blur-sm dark:bg-card", isDragging && "opacity-40")}
       aria-label={`Lista ${list.name}`}
     >
       {/* Toda la cabecera sirve para arrastrar la lista; los botones internos siguen funcionando
@@ -339,7 +339,7 @@ function ListColumn({
           </Menu>
         )}
       </header>
-      <div className="min-h-2 flex-1 space-y-3 overflow-y-auto px-3 pb-3 scroll-thin">
+      <div className="column-scroll min-h-2 flex-1 space-y-3 overflow-y-auto px-3 pt-1 pb-12 scroll-thin">
         <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
           {cardIds.map((id) => (
             <SortableCard

@@ -256,3 +256,8 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Las tarjetas que sobran en una columna se desvanecen en lugar de cortarse en seco. */
+.column-scroll {
+  mask-image: linear-gradient(to bottom, transparent, #000 0.25rem, #000 calc(100% - 3.5rem), transparent);
+}
