@@ -1,0 +1,7 @@
+# Usa las reglas por defecto de Gitleaks y excluye las pruebas, que usan contraseñas inventadas.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Datos de prueba"
+paths = ['''^tests/''']
