@@ -264,3 +264,18 @@
 .auth-wordmark { display: block; width: auto; height: 53px; max-width: 100%; color: var(--auth-ink); }
 @media (max-width: 1023px) { .auth-wordmark { height: 43px; } }
 @media (max-height: 760px) { .auth-wordmark { height: 38px; } }
+
+/* Campo de luz interactivo: siempre detrás del formulario y sin capturar el mouse. */
+.login-ambient-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  contain: strict;
+  opacity: 0.38;
+}
+@media (hover: none), (pointer: coarse) {
+  .login-ambient-background { opacity: 0.18; }
+}

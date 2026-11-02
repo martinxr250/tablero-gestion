@@ -4,6 +4,7 @@ import { AuthArtwork } from "@/components/ui/auth-artwork";
 import { BrandWordmark } from "@/components/ui/logo";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { PageTransition } from "@/components/shell/page-transition";
+import { LoginBackground } from "@/components/ui/login-background";
 
 function AuthBrand({ className = "" }: { className?: string }) {
   return <div className={`auth-brand ${className}`}><BrandWordmark className="auth-wordmark" /></div>;
@@ -13,6 +14,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main className="auth-page">
       <ThemeSwitch />
+      <LoginBackground />
       <div aria-hidden className="auth-corner auth-corner-top" />
       <div aria-hidden className="auth-corner auth-corner-bottom" />
       <div className="auth-grid">
