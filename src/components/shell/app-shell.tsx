@@ -1,0 +1,318 @@
+"use client";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Bell, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, LogOut, Menu as MenuIcon, Moon, Plus, Search, Settings, Sun,
+  UserRound, X,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Logo } from "@/components/ui/logo";
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/overlay";
+import { Button } from "@/components/ui/primitives";
+import { Avatar } from "@/components/ui/user-avatar";
+import { api } from "@/lib/api";
+import { asColor, SWATCH } from "@/lib/colors";
+import type { WorkspaceTree } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { CommandPalette } from "./command-palette";
+import { NotificationBell } from "./notification-bell";
+import { OrgProvider, useOrg } from "./org-context";
+
+type ShellUser = { id: string; name: string; email: string; hasAvatar: boolean };
+
+export function AppShell({ user, children }: { user: ShellUser; children: ReactNode }) {
+  return (
+    <OrgProvider>
+      <Shell user={user}>{children}</Shell>
+    </OrgProvider>
+  );
+}
+
+function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const pathname = usePathname();
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    setNavOpen(false);
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <div className="flex h-dvh gap-3 overflow-hidden bg-background lg:p-3">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2">
+        Saltar al contenido
+      </a>
+      {navOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-transform lg:static lg:translate-x-0 lg:rounded-[1.75rem] lg:border",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+        aria-label="Navegación principal"
+      >
+        <Sidebar user={user} onClose={() => setNavOpen(false)} />
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:px-6 lg:px-2">
+          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú" onClick={() => setNavOpen(true)}>
+            <MenuIcon />
+          </Button>
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex h-11 w-full max-w-xl items-center gap-2.5 rounded-full bg-card px-4 text-sm text-muted-foreground shadow-card transition-colors hover:text-foreground"
+          >
+            <Search className="size-4" />
+            <span className="min-w-0 flex-1 truncate text-left">
+              <span className="sm:hidden">Buscar…</span>
+              <span className="hidden sm:inline">Buscar tareas, tableros, personas…</span>
+            </span>
+            <kbd className="hidden rounded-md border px-1.5 text-[10px] sm:inline">⌘K</kbd>
+          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <ThemeToggle />
+            <NotificationBell />
+            <UserMenu user={user} />
+          </div>
+        </header>
+        <main id="main" className="min-h-0 flex-1 overflow-y-auto scroll-thin">
+          {children}
+        </main>
+      </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
+  );
+}
+
+function NavLink({ href, icon: Icon, label, active }: { href: string; icon: typeof Search; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        active && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/25 hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
+      )}
+    >
+      <Icon className="size-[1.1rem]" /> {label}
+    </Link>
+  );
+}
+
+function Sidebar({ user, onClose }: { user: ShellUser; onClose: () => void }) {
+  const { me, orgId, currentOrg, setOrgId } = useOrg();
+  const pathname = usePathname();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { data: tree } = useQuery({
+    queryKey: ["workspaces", orgId],
+    queryFn: () => api<WorkspaceTree>(`/orgs/${orgId}/workspaces`),
+    enabled: !!orgId,
+  });
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  async function logout() {
+    await api("/auth/logout", { method: "POST" }).catch(() => {});
+    qc.clear();
+    router.replace("/login");
+    router.refresh();
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between px-5 pt-5 pb-4">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <Logo className="size-9" />
+          <span className="leading-tight">
+            <span className="block text-lg font-bold tracking-tight text-foreground">Tableros</span>
+            <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
+          </span>
+        </Link>
+        <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Cerrar menú" onClick={onClose}>
+          <X />
+        </Button>
+      </div>
+
+      <nav className="space-y-1 px-3">
+        <NavLink href="/dashboard" icon={LayoutDashboard} label="Inicio" active={pathname === "/dashboard"} />
+        <NavLink href="/search" icon={Search} label="Búsqueda" active={pathname === "/search"} />
+        <NavLink href="/notifications" icon={Bell} label="Notificaciones" active={pathname === "/notifications"} />
+        {orgId && currentOrg?.role !== "guest" && (
+          <NavLink href={`/o/${orgId}/settings`} icon={Settings} label="Ajustes" active={pathname === `/o/${orgId}/settings`} />
+        )}
+      </nav>
+
+      <div className="mx-5 my-4 border-t" />
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-between px-6 pb-2">
+          <Link href={orgId ? `/o/${orgId}` : "/dashboard"} className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
+            Espacios de trabajo
+          </Link>
+        </div>
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4 scroll-thin">
+          {!orgId && me && (
+            <Link href="/orgs/new" className="block rounded-xl border border-dashed px-3 py-3 text-center text-sm text-muted-foreground hover:text-foreground">
+              Creá tu primera organización
+            </Link>
+          )}
+          {tree?.workspaces.map((w) => {
+            const isCollapsed = collapsed[w.id];
+            return (
+              <div key={w.id}>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent"
+                    aria-label={isCollapsed ? `Expandir ${w.name}` : `Contraer ${w.name}`}
+                    aria-expanded={!isCollapsed}
+                    onClick={() => setCollapsed({ ...collapsed, [w.id]: !isCollapsed })}
+                  >
+                    <ChevronRight className={cn("size-3.5 transition-transform", !isCollapsed && "rotate-90")} />
+                  </button>
+                  <Link
+                    href={`/w/${w.id}`}
+                    className={cn("flex-1 truncate rounded-lg px-1.5 py-1.5 text-sm font-semibold hover:bg-sidebar-accent", pathname === `/w/${w.id}` && "text-primary")}
+                  >
+                    {w.name}
+                  </Link>
+                </div>
+                {!isCollapsed && (
+                  <ul className="ml-[1.15rem] space-y-0.5 border-l pl-2">
+                    {w.boards.map((b) => (
+                      <li key={b.id}>
+                        <Link
+                          href={`/b/${b.id}`}
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            pathname === `/b/${b.id}` && "bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
+                          )}
+                        >
+                          <span className={cn("size-2 shrink-0 rounded-full", SWATCH[asColor(b.color)])} />
+                          <span className="truncate">{b.name}</span>
+                        </Link>
+                      </li>
+                    ))}
+                    {w.boards.length === 0 && <li className="px-2 py-1.5 text-xs text-muted-foreground">Sin tableros</li>}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="m-3 overflow-hidden rounded-2xl border bg-card">
+        <Menu>
+          <MenuTrigger asChild>
+            <button className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary">
+                {(currentOrg?.name ?? "?").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] text-muted-foreground">Organización</span>
+                <span className="block truncate text-sm font-semibold text-foreground">{currentOrg?.name ?? "Sin organización"}</span>
+              </span>
+              <ChevronsUpDown className="size-4 text-muted-foreground" />
+            </button>
+          </MenuTrigger>
+          <MenuContent align="start" side="top" className="w-60">
+            <MenuLabel>Tus organizaciones</MenuLabel>
+            {me?.orgs.map((o) => (
+              <MenuItem
+                key={o.id}
+                onSelect={() => {
+                  setOrgId(o.id);
+                  router.push(`/o/${o.id}`);
+                }}
+              >
+                <span className="flex-1 truncate">{o.name}</span>
+                {o.id === orgId && <Check className="text-primary" />}
+              </MenuItem>
+            ))}
+            <MenuSeparator />
+            <MenuItem onSelect={() => router.push("/orgs/new")}>
+              <Plus /> Nueva organización
+            </MenuItem>
+          </MenuContent>
+        </Menu>
+        <div className="flex items-center justify-between border-t px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <button onClick={logout} className="inline-flex items-center gap-1.5 hover:text-foreground">
+            <LogOut className="size-3.5" /> Salir
+          </button>
+          <Link href="/settings" className="inline-flex items-center gap-1.5 hover:text-foreground" title={user.email}>
+            <UserRound className="size-3.5" /> Mi cuenta
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const dark = mounted && resolvedTheme === "dark";
+  return (
+    <Button variant="ghost" size="icon" className="rounded-full" aria-label={dark ? "Usar tema claro" : "Usar tema oscuro"} onClick={() => setTheme(dark ? "light" : "dark")}>
+      {dark ? <Sun /> : <Moon />}
+    </Button>
+  );
+}
+
+function UserMenu({ user }: { user: ShellUser }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { me } = useOrg();
+  const u = me?.user ?? user;
+  async function logout() {
+    await api("/auth/logout", { method: "POST" }).catch(() => {});
+    qc.clear();
+    router.replace("/login");
+    router.refresh();
+  }
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <button className="relative ml-1 rounded-full" aria-label="Menú de usuario">
+          <Avatar user={{ id: u.id, name: u.name, hasAvatar: u.hasAvatar }} size={38} />
+          <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-success ring-2 ring-background" aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuContent className="w-60">
+        <div className="px-2 py-1.5">
+          <p className="truncate text-sm font-semibold">{u.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+        </div>
+        <MenuSeparator />
+        <MenuItem onSelect={() => router.push("/settings")}>
+          <UserRound /> Mi cuenta
+        </MenuItem>
+        <MenuItem onSelect={() => router.push("/docs/api")}>
+          <Settings /> Documentación de la API
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem danger onSelect={logout}>
+          <LogOut /> Cerrar sesión
+        </MenuItem>
+      </MenuContent>
+    </Menu>
+  );
+}
