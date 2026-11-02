@@ -30,7 +30,7 @@ export function Providers({ nonce, children }: { nonce?: string; children: React
       }),
   );
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce} disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem nonce={nonce} disableTransitionOnChange>
       <QueryClientProvider client={client}>
         <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
         <Toaster position="bottom-right" closeButton />

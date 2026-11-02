@@ -1,8 +1,11 @@
 "use client";
 
+import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Alert, Button, Field, Input } from "@/components/ui/primitives";
+import { PasswordRequirements } from "@/components/ui/password-requirements";
+import { Alert, Button, Input } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 
 export function ResetForm() {
@@ -10,6 +13,7 @@ export function ResetForm() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,21 +32,76 @@ export function ResetForm() {
     }
   }
 
-  if (!token) return <Alert>El enlace no es válido.</Alert>;
+  if (!token) {
+    return (
+      <div className="login-form">
+        <h1 className="login-title">Enlace no válido</h1>
+        <p className="login-description">Pedí uno nuevo desde la recuperación de contraseña.</p>
+        <p className="login-register">
+          <Link href="/forgot-password" className="font-medium text-primary hover:underline">
+            Recuperar contraseña
+          </Link>
+        </p>
+      </div>
+    );
+  }
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Nueva contraseña</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Se cerrarán todas tus sesiones abiertas.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4">
-        {error && <Alert>{error}</Alert>}
-        <Field label="Contraseña nueva" htmlFor="password" hint="Mínimo 10 caracteres.">
-          <Input id="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </Field>
-        <Field label="Repetir contraseña" htmlFor="confirm">
-          <Input id="confirm" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </Field>
-        <Button type="submit" className="w-full" loading={loading}>
+    <div className="login-form">
+      <h1 className="login-title">Nueva contraseña</h1>
+      <p className="login-description">Se cerrarán todas tus sesiones abiertas.</p>
+      <form onSubmit={submit} className="login-fields" noValidate>
+        {error && error !== "Las contraseñas no coinciden" && <Alert>{error}</Alert>}
+        <div className="login-input-wrap">
+          <label htmlFor="password" className="sr-only">
+            Contraseña nueva
+          </label>
+          <LockKeyhole aria-hidden className="login-input-icon" />
+          <Input
+            className="login-input login-password"
+            id="password"
+            type={show ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Contraseña nueva"
+            required
+            minLength={8}
+            maxLength={128}
+            aria-describedby="password-requirements"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="button" className="login-password-toggle" onClick={() => setShow(!show)} aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={show}>
+            {show ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+          </button>
+        </div>
+        <div className="login-input-wrap">
+          <label htmlFor="confirm" className="sr-only">
+            Repetir contraseña
+          </label>
+          <LockKeyhole aria-hidden className="login-input-icon" />
+          <Input
+            className="login-input"
+            id="confirm"
+            type={show ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Repetir contraseña"
+            required
+            value={confirm}
+            aria-invalid={error === "Las contraseñas no coinciden" ? true : undefined}
+            onChange={(e) => {
+              setConfirm(e.target.value);
+              if (error) setError(null);
+            }}
+          />
+        </div>
+        {error === "Las contraseñas no coinciden" && (
+          <p role="alert" className="login-field-error">
+            {error}
+          </p>
+        )}
+        <PasswordRequirements password={password} confirmation={confirm} />
+        <Button type="submit" className="login-submit w-full" loading={loading}>
           Guardar contraseña
+          <ArrowRight aria-hidden className="size-5" />
         </Button>
       </form>
     </div>

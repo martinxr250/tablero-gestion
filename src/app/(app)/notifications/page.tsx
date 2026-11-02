@@ -1,7 +1,8 @@
 "use client";
 
+import { BRAND_NAME } from "@/lib/brand";
+
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button, Card, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/ui/primitives";
 import { describeNotification } from "@/lib/activity";
@@ -29,7 +30,7 @@ export default function NotificationsPage() {
   const unread = q.data?.pages[0]?.unread ?? 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
         title="Notificaciones"
         subtitle={unread ? `${unread} sin leer` : "Estás al día"}
@@ -43,7 +44,7 @@ export default function NotificationsPage() {
       />
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
       {q.isLoading && <Skeleton className="h-64" />}
-      {q.data && items.length === 0 && <EmptyState icon={<Bell />} title="No tenés notificaciones" description="Te avisamos cuando te asignen tareas, te mencionen o algo esté por vencer." />}
+      {q.data && items.length === 0 && <EmptyState illustration="notifications" title="No tenés notificaciones" description="Te avisamos cuando te asignen tareas, te mencionen o algo esté por vencer." />}
       {items.length > 0 && (
         <Card>
           <ul className="divide-y divide-border">
@@ -58,7 +59,7 @@ export default function NotificationsPage() {
                 >
                   <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-primary")} />
                   <span className="min-w-0 flex-1">
-                    <strong className="font-semibold">{n.actorName ?? "Tableros"}</strong> {describeNotification(n)}
+                    <strong className="font-semibold">{n.actorName ?? BRAND_NAME}</strong> {describeNotification(n)}
                     <span className="block text-xs text-muted-foreground">
                       {typeof n.data.boardName === "string" && `${n.data.boardName} · `}
                       {ago(n.createdAt)}

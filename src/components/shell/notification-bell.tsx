@@ -1,5 +1,9 @@
 "use client";
 
+import { BRAND_NAME } from "@/lib/brand";
+
+import { Artwork } from "@/components/ui/artwork";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import Link from "next/link";
@@ -60,7 +64,7 @@ export function NotificationBell() {
               <Spinner />
             </div>
           )}
-          {data?.notifications.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No tenés notificaciones.</p>}
+          {data?.notifications.length === 0 && <div className="relative p-6 text-center text-sm text-muted-foreground"><Artwork kind="notifications" className="absolute top-1/2 left-4 size-10 -translate-y-1/2" sizes="40px" />No tenés notificaciones.</div>}
           {data?.notifications.slice(0, 8).map((n) => (
             <button
               key={n.id}
@@ -74,7 +78,7 @@ export function NotificationBell() {
               <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-primary")} />
               <span className="min-w-0 flex-1">
                 <span className="line-clamp-2">
-                  <strong className="font-semibold">{n.actorName ?? "Tableros"}</strong> {describeNotification(n)}
+                  <strong className="font-semibold">{n.actorName ?? BRAND_NAME}</strong> {describeNotification(n)}
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">{ago(n.createdAt)}</span>
               </span>

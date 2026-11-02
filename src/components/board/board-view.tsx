@@ -1,10 +1,10 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity as ActivityIcon, Archive, Filter, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, Archive, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Filter, Flame, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { useOrg, useSyncOrg } from "@/components/shell/org-context";
 import { Avatar, AvatarStack } from "@/components/ui/user-avatar";
@@ -13,7 +13,7 @@ import { Dialog, Menu, MenuContent, MenuItem, MenuTrigger, Popover, PopoverConte
 import { Button, ErrorState, Input, Select, Skeleton, Spinner } from "@/components/ui/primitives";
 import { describeActivity } from "@/lib/activity";
 import { api, ApiError } from "@/lib/api";
-import { asColor, PRIORITY, SWATCH_TEXT } from "@/lib/colors";
+import { PRIORITY } from "@/lib/colors";
 import { ago, dueState, fmtDateTime } from "@/lib/format";
 import type { Activity, BoardData, CardSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,49 @@ import { BoardSettingsDialog } from "./board-settings";
 import { CardModal } from "./card-modal";
 import { Kanban } from "./kanban";
 import type { RepoInfo } from "./repo-settings";
+
+// Preferencia "resumen del tablero contraído", guardada en el navegador.
+const HEADER_KEY = "tableros.boardHeaderCompact";
+const HEADER_EVENT = "tableros:board-header";
+function subscribeHeader(cb: () => void) {
+  window.addEventListener("storage", cb);
+  window.addEventListener(HEADER_EVENT, cb);
+  return () => {
+    window.removeEventListener("storage", cb);
+    window.removeEventListener(HEADER_EVENT, cb);
+  };
+}
+function readHeaderCompact() {
+  try {
+    return localStorage.getItem(HEADER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function setCompactHeader(value: boolean) {
+  try {
+    localStorage.setItem(HEADER_KEY, value ? "1" : "0");
+  } catch {
+    /* almacenamiento no disponible */
+  }
+  window.dispatchEvent(new Event(HEADER_EVENT));
+}
+
+const LIST_SEGMENTS = ["bg-primary text-primary-foreground", "bg-chart-2 text-primary-foreground", "bg-brand text-brand-foreground", "bg-success text-primary-foreground"];
+
+function BoardChip({ icon: Icon, label, value }: { icon: typeof Flame; label: string; value: string }) {
+  return (
+    <div className="pill-chip">
+      <span className="flex size-10 items-center justify-center rounded-full border bg-card">
+        <Icon className="size-4 text-muted-foreground" aria-hidden />
+      </span>
+      <span className="leading-tight">
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        <span className="block text-sm">{value}</span>
+      </span>
+    </div>
+  );
+}
 
 type Filters = { text: string; member: string; label: string; due: string; priority: string };
 const EMPTY: Filters = { text: "", member: "", label: "", due: "", priority: "" };
@@ -36,6 +79,7 @@ export function BoardView({ boardId }: { boardId: string }) {
   useSyncOrg(q.data?.board.orgId);
 
   const [filters, setFilters] = useState<Filters>(EMPTY);
+  const compactHeader = useSyncExternalStore(subscribeHeader, readHeaderCompact, () => false);
   const [highlight, setHighlight] = useState<Set<string>>(new Set());
   const [panel, setPanel] = useState<"settings" | "archived" | "activity" | null>(null);
   const cursor = useRef<number | null>(null);
@@ -120,47 +164,47 @@ export function BoardView({ boardId }: { boardId: string }) {
   const data = q.data;
   const canEdit = (data.role === "editor" || data.role === "admin") && !data.board.archivedAt;
   const isAdmin = data.role === "admin";
-  const progress = data.cards.length ? Math.round((data.cards.filter((c) => c.completedAt).length / data.cards.length) * 100) : 0;
+  const compact = compactHeader;
+  const completed = data.cards.filter((c) => c.completedAt).length;
+  const overdue = data.cards.filter((c) => dueState(c.dueAt, !!c.completedAt) === "overdue").length;
+  const progress = data.cards.length ? Math.round((completed / data.cards.length) * 100) : 0;
 
   return (
     <div className="flex h-full flex-col">
-      <header className="px-4 pt-5 pb-4 sm:px-6">
-        <div className="flex flex-wrap items-center gap-4">
+      <header className="px-4 pt-5 pb-5 sm:px-6">
+        <div className="flex flex-wrap items-center gap-3">
           <nav aria-label="Ruta" className="flex min-w-0 items-center gap-2 text-xs font-medium">
-            <Link href={`/w/${data.board.workspaceId}`} className="truncate rounded-lg bg-card px-2.5 py-1.5 shadow-card hover:text-primary">
+            <Link href={`/w/${data.board.workspaceId}`} className="truncate rounded-full border bg-card px-3.5 py-2 hover:text-primary">
               {data.board.workspaceName}
             </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="truncate rounded-lg bg-card px-2.5 py-1.5 shadow-card">{data.board.name}</span>
+            {!compact && <span className="truncate rounded-full border bg-card px-3.5 py-2">{data.board.name}</span>}
           </nav>
+          {compact && (
+            <span className="flex min-w-0 items-baseline gap-3">
+              <span className="display-title truncate text-2xl">{data.board.name}</span>
+              <span className="display-figure shrink-0 text-xl">
+                {progress}
+                <span className="dim">%</span>
+              </span>
+            </span>
+          )}
           <RepoChip boardId={boardId} canSync={data.role !== "viewer"} />
           <span className="flex-1" />
-          <AvatarStack users={data.people} max={3} size={32} />
-          <div className="w-44">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Progreso: {progress}%</p>
-            <div className="h-2.5 overflow-hidden rounded-full border bg-card p-px" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Tareas completadas">
-              <div className="h-full rounded-full bg-[repeating-linear-gradient(135deg,var(--brand)_0_6px,color-mix(in_oklch,var(--brand),white_25%)_6px_12px)] transition-all" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-wrap items-center gap-4">
-          <div className={cn("flex size-14 shrink-0 items-center justify-center rounded-2xl border bg-card shadow-card", SWATCH_TEXT[asColor(data.board.color)])}>
-            <SquareKanban className="size-6" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.board.name}</h1>
-              <span className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
-                {data.board.visibility === "private" ? <Lock className="size-3" /> : <Users className="size-3" />}
-                {data.board.visibility === "private" ? "Privado" : "Espacio"}
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{data.board.description || `${data.cards.length} tareas en ${data.lists.length} columnas`}</p>
-          </div>
+          <AvatarStack users={data.people} max={3} size={36} />
           <div className="flex flex-wrap items-center gap-2">
             <FiltersButton data={data} filters={filters} setFilters={setFilters} />
             <Button variant="secondary" size="sm" onClick={() => setPanel("activity")}>
               <ActivityIcon /> <span className="hidden sm:inline">Actividad</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label={compact ? "Mostrar resumen del tablero" : "Contraer resumen del tablero"}
+              aria-expanded={!compact}
+              title={compact ? "Mostrar resumen" : "Contraer resumen"}
+              onClick={() => setCompactHeader(!compact)}
+            >
+              {compact ? <ChevronsUpDown /> : <ChevronsDownUp />}
             </Button>
             <Menu>
               <MenuTrigger asChild>
@@ -179,21 +223,65 @@ export function BoardView({ boardId }: { boardId: string }) {
                 )}
               </MenuContent>
             </Menu>
-            {canEdit && (
-              <Button
-                variant="brand"
-                className="rounded-full"
-                onClick={() => {
-                  const el = document.getElementById("add-list-trigger");
-                  el?.scrollIntoView({ behavior: "smooth", inline: "end", block: "nearest" });
-                  el?.click();
-                }}
-              >
-                <Plus /> Agregar columna
-              </Button>
-            )}
           </div>
         </div>
+
+        {!compact && (
+          <>
+        <div className="mt-6 flex flex-wrap items-end gap-x-10 gap-y-5">
+          <div className="min-w-0">
+            <h1 className="display-title text-4xl break-words sm:text-5xl">{data.board.name}</h1>
+            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand-soft px-2 py-0.5 text-[10px] font-semibold tracking-wider text-brand uppercase">
+                {data.board.visibility === "private" ? <Lock className="size-3" /> : <Users className="size-3" />}
+                {data.board.visibility === "private" ? "Privado" : "Espacio"}
+              </span>
+              <span className="truncate">{data.board.description || `${data.cards.length} tareas en ${data.lists.length} columnas`}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-6 pb-1">
+            <BoardChip icon={SquareKanban} label="Tareas" value={`${data.cards.length - completed} abiertas`} />
+            <BoardChip icon={Flame} label="Vencidas" value={overdue > 0 ? String(overdue) : "Ninguna"} />
+            <BoardChip icon={CheckCircle2} label="Completadas" value={String(completed)} />
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-xs text-muted-foreground">Progreso</p>
+            <p className="display-figure text-6xl">
+              {progress}
+              <span className="dim">%</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Barra segmentada: una franja por columna, proporcional a sus tarjetas */}
+        <div className="mt-6 flex items-end gap-1.5">
+          {data.lists.map((l, i) => {
+            const count = data.cards.filter((c) => c.listId === l.id).length;
+            return (
+              <div key={l.id} className="min-w-20" style={{ flexGrow: Math.max(count / Math.max(data.cards.length, 1), 0.08), flexBasis: 0 }}>
+                <span className="mb-1.5 block truncate px-1 text-xs text-muted-foreground">{l.name}</span>
+                <span className={cn("flex h-10 items-center justify-end rounded-full p-1", count === 0 ? "hatched bg-muted" : LIST_SEGMENTS[i % LIST_SEGMENTS.length])}>
+                  <span className="rounded-full bg-black/15 px-2.5 py-0.5 text-xs font-medium tabular-nums dark:bg-black/25">{count}</span>
+                </span>
+              </div>
+            );
+          })}
+          {canEdit && (
+            <Button
+              variant="brand"
+              className="h-10 shrink-0 rounded-full px-5"
+              onClick={() => {
+                const el = document.getElementById("add-list-trigger");
+                el?.scrollIntoView({ behavior: "smooth", inline: "end", block: "nearest" });
+                el?.click();
+              }}
+            >
+              <Plus /> Agregar columna
+            </Button>
+          )}
+        </div>
+          </>
+        )}
       </header>
       {data.board.archivedAt && (
         <div className="mx-4 mb-3 flex items-center justify-between gap-3 rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-900 sm:mx-6 dark:bg-amber-500/15 dark:text-amber-100">

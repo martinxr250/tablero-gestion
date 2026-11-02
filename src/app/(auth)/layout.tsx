@@ -1,17 +1,34 @@
+import "./auth.css";
 import type { ReactNode } from "react";
+import { AuthArtwork } from "@/components/ui/auth-artwork";
 import { Logo } from "@/components/ui/logo";
+import { BRAND_NAME } from "@/lib/brand";
+import { ThemeSwitch } from "@/components/ui/theme-switch";
+
+function AuthBrand({ className = "" }: { className?: string }) {
+  return <div className={`auth-brand ${className}`}><Logo className="auth-brand-icon" /><div><span className="auth-brand-name">{BRAND_NAME}</span></div></div>;
+}
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10">
-      <div className="mb-6 flex items-center gap-2.5">
-        <Logo className="size-10" />
-        <span className="leading-tight">
-          <span className="block text-xl font-bold tracking-tight">Tableros</span>
-          <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
-        </span>
+    <main className="auth-page">
+      <ThemeSwitch />
+      <div aria-hidden className="auth-corner auth-corner-top" />
+      <div aria-hidden className="auth-corner auth-corner-bottom" />
+      <div className="auth-grid">
+        <section className="auth-presentation" aria-label="Gestión de proyectos en equipo">
+          <AuthBrand />
+          <div className="auth-intro">
+            <h2>Gestioná tus<br />proyectos, <span>en equipo.</span></h2>
+            <p>Planificá, asigná y seguí el progreso de tu equipo en un solo lugar.</p>
+          </div>
+          <AuthArtwork />
+        </section>
+        <section className="auth-glass-card" aria-label="Acceso a Tableros">
+          <AuthBrand className="auth-card-brand" />
+          {children}
+        </section>
       </div>
-      <div className="w-full max-w-[26rem] rounded-[1.75rem] border bg-card p-8 shadow-card">{children}</div>
     </main>
   );
 }

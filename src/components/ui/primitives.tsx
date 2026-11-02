@@ -11,6 +11,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton as UiSkeleton } from "@/components/ui/skeleton";
 import { Textarea as UiTextarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Illustration, type IllustrationKind } from "@/components/ui/illustration";
+import { Artwork, type ArtworkKind } from "@/components/ui/artwork";
 
 // Capa fina sobre shadcn/ui: mantiene una API estable para las pantallas de la app.
 
@@ -93,13 +95,13 @@ export const Spinner = ({ className }: { className?: string }) => (
 export const Skeleton = ({ className }: { className?: string }) => <UiSkeleton className={cn("rounded-2xl", className)} />;
 
 export function Card({ className, ...props }: ComponentProps<"div">) {
-  return <UiCard className={cn("gap-0 rounded-3xl py-0 shadow-card ring-0", className)} {...props} />;
+  return <UiCard className={cn("premium-card gap-0 rounded-[2rem] py-0 shadow-card ring-0", className)} {...props} />;
 }
 
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({ icon, illustration, title, description, action }: { icon?: ReactNode; illustration?: IllustrationKind; title: string; description?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed bg-card/60 px-6 py-12 text-center">
-      {icon && <div className="mb-1 flex size-11 items-center justify-center rounded-2xl bg-primary-soft text-primary [&_svg]:size-5">{icon}</div>}
+      {illustration ? <Illustration kind={illustration} className="mb-1 h-20 w-28" /> : icon && <div className="mb-1 flex size-11 items-center justify-center rounded-2xl bg-primary-soft text-primary [&_svg]:size-5">{icon}</div>}
       <p className="font-semibold">{title}</p>
       {description && <p className="max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
@@ -107,12 +109,13 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, artwork }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; artwork?: ArtworkKind }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="truncate text-2xl font-bold tracking-tight">{title}</h1>
-        {subtitle && <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>}
+    <div className="relative mb-8 flex flex-wrap items-end justify-between gap-4">
+      {artwork && !actions && <Artwork kind={artwork} className="absolute -top-3 right-2 hidden h-20 w-24 opacity-90 sm:block" sizes="96px" />}
+      <div className={cn("min-w-0", artwork && !actions && "sm:pr-28")}>
+        <h1 className="display-title text-4xl break-words sm:text-5xl">{title}</h1>
+        {subtitle && <div className="mt-3 text-sm text-muted-foreground">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -122,6 +125,7 @@ export function PageHeader({ title, subtitle, actions }: { title: ReactNode; sub
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <Illustration kind="connection" className="h-16 w-20" />
       <p className="font-semibold">No pudimos cargar esta sección</p>
       <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : "Error inesperado"}</p>
       {retry && (

@@ -1,9 +1,10 @@
 "use client";
 
+import { ArrowRight, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Alert, Button, Field, Input, Spinner } from "@/components/ui/primitives";
+import { Alert, Button, Input, Spinner } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 
 export function VerifyEmail() {
@@ -46,7 +47,7 @@ export function VerifyEmail() {
   if (state === "ok")
     return (
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">¡Correo confirmado!</h1>
+        <h1 className="login-title">¡Correo confirmado!</h1>
         <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         <Link href="/login" className="mt-6 inline-flex">
           <Button>Iniciar sesión</Button>
@@ -54,18 +55,28 @@ export function VerifyEmail() {
       </div>
     );
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Confirmá tu correo</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Te enviamos un enlace al registrarte. Si venció o no llegó, pedí uno nuevo.</p>
-      <form onSubmit={resend} className="mt-6 space-y-4">
+    <div className="login-form">
+      <h1 className="login-title">Confirmá tu correo</h1>
+      <p className="login-description">Te enviamos un enlace al registrarte. Si venció o no llegó, pedí uno nuevo.</p>
+      <form onSubmit={resend} className="login-fields">
         {message && <Alert tone={state === "error" ? "danger" : "info"}>{message}</Alert>}
-        <Field label="Correo" htmlFor="email">
-          <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <Button type="submit" className="w-full" loading={loading}>
+        <div className="login-input-wrap">
+          <label htmlFor="email" className="sr-only">
+            Correo
+          </label>
+          <Mail aria-hidden className="login-input-icon" />
+          <Input className="login-input" id="email" type="email" placeholder="Tu correo electrónico" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <Button type="submit" className="login-submit w-full" loading={loading}>
           Reenviar enlace
+          <ArrowRight aria-hidden className="size-5" />
         </Button>
       </form>
+      <p className="login-register">
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Volver a iniciar sesión
+        </Link>
+      </p>
     </div>
   );
 }

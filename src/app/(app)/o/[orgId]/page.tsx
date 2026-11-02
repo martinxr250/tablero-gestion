@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderKanban, Plus, Settings } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -39,7 +39,7 @@ export default function OrgPage() {
   const canCreateWs = org.data && org.data.role !== "guest";
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
         title={org.data?.name ?? <Skeleton className="h-8 w-48" />}
         subtitle={org.data && `${org.data.members} miembro${org.data.members === 1 ? "" : "s"}`}
@@ -61,7 +61,7 @@ export default function OrgPage() {
         }
       />
       {tree.isLoading && <Skeleton className="h-40" />}
-      {tree.data?.workspaces.length === 0 && <EmptyState icon={<FolderKanban />} title="No tenés acceso a ningún espacio de trabajo" />}
+      {tree.data?.workspaces.length === 0 && <EmptyState illustration="projects" title="No tenés acceso a ningún espacio de trabajo" />}
       <div className="space-y-10">
         {tree.data?.workspaces.map((w) => (
           <section key={w.id}>

@@ -8,6 +8,7 @@ import { useOrg } from "@/components/shell/org-context";
 import { Alert, Button, Field, Input, Select, Skeleton, Spinner } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
+import { Artwork } from "@/components/ui/artwork";
 import type { BoardData } from "@/lib/types";
 
 export type RepoInfo = {
@@ -76,13 +77,14 @@ function ConnectForm({ orgId, onDone }: { orgId: string; onDone: () => void }) {
   });
   return (
     <form
-      className="space-y-4 rounded-2xl border p-4"
+      className="relative space-y-4 rounded-2xl border p-4"
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
         connect.mutate();
       }}
     >
-      <div className="flex items-start gap-3">
+      <Artwork kind="integrations" className="absolute top-3 right-3 hidden size-20 sm:block" sizes="80px" />
+      <div className="flex items-start gap-3 sm:pr-24">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
           <KeyRound className="size-5" />
         </span>

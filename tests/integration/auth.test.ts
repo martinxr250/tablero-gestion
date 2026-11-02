@@ -7,8 +7,8 @@ describe("registro, verificación e inicio de sesión", () => {
   it("no permite iniciar sesión sin verificar el correo", async () => {
     const c = new Client();
     const email = `noverif-${Date.now()}@example.test`;
-    expect((await c.post("/auth/register", { email, name: "Ana", password: "una-clave-larga-y-segura" })).status).toBe(202);
-    const r = await c.post("/auth/login", { email, password: "una-clave-larga-y-segura" });
+    expect((await c.post("/auth/register", { email, name: "Ana", password: "Una-clave-larga-2026" })).status).toBe(202);
+    const r = await c.post("/auth/login", { email, password: "Una-clave-larga-2026" });
     expect(r.status).toBe(403);
     expect(r.body.error.code).toBe("email_not_verified");
   });
@@ -16,7 +16,7 @@ describe("registro, verificación e inicio de sesión", () => {
   it("responde igual si el correo ya existe (sin enumeración) y avisa por correo", async () => {
     const u = await newUser();
     const c = new Client();
-    const r = await c.post("/auth/register", { email: u.email, name: "Otro", password: "otra-clave-bien-larga" });
+    const r = await c.post("/auth/register", { email: u.email, name: "Otro", password: "Otra-clave-larga-2026" });
     expect(r.status).toBe(202);
     expect(mailsTo(u.email).some((m) => m.subject.includes("Intento de registro"))).toBe(true);
   });
@@ -91,12 +91,12 @@ describe("sesiones", () => {
     const u = await newUser();
     await new Client().post("/auth/forgot-password", { email: u.email });
     const token = tokenFromLastMail(u.email, "reset-password");
-    const r = await new Client().post("/auth/reset-password", { token, password: "nueva-clave-mucho-mejor" });
+    const r = await new Client().post("/auth/reset-password", { token, password: "Nueva-clave-segura-2026" });
     expect(r.status).toBe(200);
     expect((await u.get("/me")).status).toBe(401);
     // el token es de un solo uso
-    expect((await new Client().post("/auth/reset-password", { token, password: "otra-clave-mucho-mejor" })).status).toBe(400);
-    expect((await new Client().post("/auth/login", { email: u.email, password: "nueva-clave-mucho-mejor" })).status).toBe(200);
+    expect((await new Client().post("/auth/reset-password", { token, password: "Otra-clave-segura-2027" })).status).toBe(400);
+    expect((await new Client().post("/auth/login", { email: u.email, password: "Nueva-clave-segura-2026" })).status).toBe(200);
   });
 });
 

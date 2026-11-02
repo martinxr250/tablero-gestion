@@ -1,3 +1,4 @@
+import { BRAND_NAME } from "@/lib/brand";
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { headers } from "next/headers";
@@ -8,9 +9,9 @@ import "./globals.css";
 const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Tableros", template: "%s · Tableros" },
+  title: { default: BRAND_NAME, template: `%s · ${BRAND_NAME}` },
   description: "Organizá proyectos, tareas y equipos con tableros Kanban.",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/assets/brand/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

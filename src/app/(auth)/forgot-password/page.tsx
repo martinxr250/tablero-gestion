@@ -1,8 +1,9 @@
 "use client";
 
+import { ArrowRight, Mail } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { Alert, Button, Field, Input } from "@/components/ui/primitives";
+import { Alert, Button, Input } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
@@ -26,22 +27,48 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Recuperar contraseña</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Te enviamos un enlace para elegir una nueva.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4">
+    <div className="login-form">
+      <h1 className="login-title">Recuperar contraseña</h1>
+      <p className="login-description">Te enviamos un enlace para elegir una nueva.</p>
+      <form onSubmit={submit} className="login-fields" noValidate>
         {message && <Alert tone="success">{message}</Alert>}
-        {error && <Alert>{error}</Alert>}
-        <Field label="Correo" htmlFor="email">
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <Button type="submit" className="w-full" loading={loading}>
+        <div className="login-input-wrap">
+          <label htmlFor="email" className="sr-only">
+            Correo
+          </label>
+          <Mail aria-hidden className="login-input-icon" />
+          <Input
+            className="login-input"
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="Tu correo electrónico"
+            required
+            value={email}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "email-error" : undefined}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null);
+            }}
+          />
+        </div>
+        {error && (
+          <p id="email-error" role="alert" className="login-field-error">
+            {error}
+          </p>
+        )}
+        <Button type="submit" className="login-submit w-full" loading={loading} disabled={!email.trim()}>
           Enviar enlace
+          <ArrowRight aria-hidden className="size-5" />
         </Button>
       </form>
-      <Link href="/login" className="mt-6 inline-block text-sm text-primary hover:underline">
-        Volver a iniciar sesión
-      </Link>
+      <p className="login-register">
+        ¿Te acordaste?{" "}
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Volver a iniciar sesión
+        </Link>
+      </p>
     </div>
   );
 }

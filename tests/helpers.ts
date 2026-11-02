@@ -83,7 +83,7 @@ export async function newUser(name = "Usuario"): Promise<Client> {
   const c = new Client();
   c.name = `${name} ${++userCounter}`;
   c.email = `user${userCounter}-${Date.now()}@example.test`;
-  c.password = "una-clave-larga-y-segura";
+  c.password = "Una-clave-larga-2026";
   const r = await c.post("/auth/register", { email: c.email, name: c.name, password: c.password });
   if (r.status !== 202) throw new Error(`register ${r.status} ${JSON.stringify(r.body)}`);
   await c.post("/auth/verify-email", { token: tokenFromLastMail(c.email, "verify-email") });

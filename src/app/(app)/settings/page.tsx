@@ -15,8 +15,8 @@ import { ago, fmtDateTime } from "@/lib/format";
 export default function SettingsPage() {
   const [tab, setTab] = useState("profile");
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
-      <PageHeader title="Mi cuenta" />
+    <div className="settings-scene w-full px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader title="Mi cuenta" artwork="security-access" />
       <Tabs
         value={tab}
         onValueChange={setTab}
@@ -29,7 +29,7 @@ export default function SettingsPage() {
         <TabPanel value="profile">
           <ProfileLoader />
         </TabPanel>
-        <TabPanel value="security" className="space-y-6">
+        <TabPanel value="security" className="grid items-start gap-6 xl:grid-cols-2 [&>*:last-child]:xl:col-span-2">
           <ChangePassword />
           <Mfa />
           <Sessions />
@@ -73,9 +73,9 @@ function Profile({ me }: { me: NonNullable<ReturnType<typeof useOrg>["me"]> }) {
   });
   const removeAvatar = useMutation({ mutationFn: () => api("/me/avatar", { method: "DELETE" }), onSuccess: refresh });
   return (
-    <Card className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Avatar user={me.user} size={64} />
+    <Card className="grid gap-8 p-6 lg:grid-cols-[18rem_1fr] lg:p-8">
+      <div className="flex items-center gap-4 lg:flex-col lg:items-start">
+        <Avatar user={me.user} size={96} />
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" loading={upload.isPending} onClick={() => file.current?.click()}>
             Cambiar foto
@@ -100,7 +100,7 @@ function Profile({ me }: { me: NonNullable<ReturnType<typeof useOrg>["me"]> }) {
         </div>
       </div>
       <form
-        className="space-y-4"
+        className="grid content-start gap-4 md:grid-cols-2"
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
           save.mutate();
@@ -112,9 +112,11 @@ function Profile({ me }: { me: NonNullable<ReturnType<typeof useOrg>["me"]> }) {
         <Field label="Correo" htmlFor="p-email" hint="El correo no se puede cambiar.">
           <Input id="p-email" value={me.user.email} disabled />
         </Field>
-        <Button type="submit" loading={save.isPending} disabled={!name.trim() || name === me.user.name}>
-          Guardar
-        </Button>
+        <div className="md:col-span-2">
+          <Button type="submit" loading={save.isPending} disabled={!name.trim() || name === me.user.name}>
+            Guardar
+          </Button>
+        </div>
       </form>
     </Card>
   );
@@ -149,7 +151,7 @@ function ChangePassword() {
           <Input id="pw-current" type="password" autoComplete="current-password" value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Nueva contraseña" htmlFor="pw-new" hint="Mínimo 10 caracteres.">
+          <Field label="Nueva contraseña" htmlFor="pw-new" hint="8 a 128 caracteres, con mayúscula, minúscula y número. Evitá claves comunes o repetitivas.">
             <Input id="pw-new" type="password" autoComplete="new-password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
           </Field>
           <Field label="Repetir" htmlFor="pw-confirm">

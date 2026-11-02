@@ -43,7 +43,7 @@ export default function WorkspacePage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
         title={workspace.name}
         subtitle={workspace.description ?? "Espacio de trabajo"}
@@ -58,7 +58,7 @@ export default function WorkspacePage() {
       <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
         <TabPanel value="boards">
           {active.length === 0 ? (
-            <EmptyState title="No hay tableros" description="Creá el primero para empezar a organizar tareas." />
+            <EmptyState illustration="projects" title="No hay tableros" description="Creá el primero para empezar a organizar tareas." />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {active.map((b) => (
@@ -179,7 +179,7 @@ function WorkspaceSettings({ data }: { data: WorkspaceData }) {
     },
   });
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="grid items-start gap-6 xl:grid-cols-2">
       <Card className="space-y-4 p-6">
         <Field label="Nombre" htmlFor="ws-name">
           <Input id="ws-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />

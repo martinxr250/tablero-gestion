@@ -30,7 +30,7 @@ export function CardTile({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-card text-left shadow-card transition-[box-shadow,border-color] hover:border-primary/30",
+        "task-surface rounded-[1.4rem] border bg-card text-left shadow-card transition-[box-shadow,border-color] hover:border-primary/40 dark:bg-secondary",
         dragging && "rotate-2 border-brand shadow-xl",
         highlighted && "border-brand ring-2 ring-brand/30",
         card.completedAt && "opacity-80",

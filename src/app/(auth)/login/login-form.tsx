@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { safeNext } from "../safe-next";
@@ -17,6 +18,10 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  // Credenciales o código incorrectos se muestran en el campo; el resto, arriba del formulario.
+  const fieldError = error && (error.code === "invalid_credentials" || error.code === "invalid_code") ? error.message : null;
+  const formError = fieldError ? null : error;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -43,17 +48,17 @@ export function LoginForm() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">{step === "password" ? "Iniciar sesión" : "Verificación en dos pasos"}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {step === "password" ? "Entrá con tu correo y contraseña." : "Ingresá el código de 6 dígitos de tu app autenticadora o un código de recuperación."}
+    <div className="login-form">
+      <h1 className="login-title">{step === "password" ? "Iniciar sesión" : "Verificación en dos pasos"}</h1>
+      <p className="login-description">
+        {step === "password" ? "Accedé a tu espacio de trabajo." : "Ingresá el código de 6 dígitos de tu app autenticadora o un código de recuperación."}
       </p>
-      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+      <form onSubmit={submit} className="login-fields" noValidate>
         {params.get("reset") === "1" && <Alert tone="success">Contraseña actualizada. Iniciá sesión.</Alert>}
-        {error && (
+        {formError && (
           <Alert>
-            {error.message}
-            {error.code === "email_not_verified" && (
+            {formError.message}
+            {formError.code === "email_not_verified" && (
               <>
                 {" "}
                 <Link className="font-medium underline" href={`/verify-email?email=${encodeURIComponent(email)}`}>
@@ -65,29 +70,66 @@ export function LoginForm() {
         )}
         {step === "password" ? (
           <>
-            <Field label="Correo" htmlFor="email">
-              <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-            <Field label="Contraseña" htmlFor="password">
-              <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </Field>
-            <div className="flex justify-end">
-              <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                Olvidé mi contraseña
+            <div className="login-input-wrap">
+              <label htmlFor="email" className="sr-only">Correo</label>
+              <Mail aria-hidden className="login-input-icon" />
+              <Input className="login-input" id="email" type="email" autoComplete="email" placeholder="Tu correo electrónico" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="login-input-wrap">
+              <label htmlFor="password" className="sr-only">Contraseña</label>
+              <LockKeyhole aria-hidden className="login-input-icon" />
+              <Input
+                className="login-input login-password"
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="Tu contraseña"
+                required
+                value={password}
+                aria-invalid={fieldError ? true : undefined}
+                aria-describedby={fieldError ? "password-error" : undefined}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldError) setError(null);
+                }}
+              />
+              <button type="button" className="login-password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={showPassword}>{showPassword ? <EyeOff aria-hidden /> : <Eye aria-hidden />}</button>
+            </div>
+            {fieldError && (
+              <p id="password-error" role="alert" className="login-field-error">
+                {fieldError}
+              </p>
+            )}
+            <div className="login-recovery">
+              <Link href="/forgot-password" className="text-primary hover:underline">
+                ¿Olvidaste tu contraseña?
               </Link>
             </div>
           </>
         ) : (
-          <Field label="Código" htmlFor="code">
-            <Input id="code" inputMode="text" autoComplete="one-time-code" autoFocus required value={code} onChange={(e) => setCode(e.target.value)} />
+          <Field label="Código" htmlFor="code" error={fieldError ?? undefined}>
+            <Input
+              id="code"
+              inputMode="text"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              value={code}
+              aria-invalid={fieldError ? true : undefined}
+              onChange={(e) => {
+                setCode(e.target.value);
+                if (fieldError) setError(null);
+              }}
+            />
           </Field>
         )}
-        <Button type="submit" className="w-full" loading={loading}>
+        <Button type="submit" className="login-submit w-full" loading={loading}>
           {step === "password" ? "Entrar" : "Verificar"}
+          <ArrowRight aria-hidden className="size-5" />
         </Button>
       </form>
       {step === "password" && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="login-register">
           ¿No tenés cuenta?{" "}
           <Link href={`/register${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`} className="font-medium text-primary hover:underline">
             Registrate

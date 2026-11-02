@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, GripVertical, MoreHorizontal, Palette, Pencil, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Illustration } from "@/components/ui/illustration";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { Menu, MenuContent, MenuItem, MenuTrigger, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
 import { Button, Input, Textarea } from "@/components/ui/primitives";
@@ -268,7 +269,7 @@ function ListColumn({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("flex max-h-full w-[19rem] shrink-0 flex-col rounded-3xl border bg-card/70 shadow-card backdrop-blur-sm", isDragging && "opacity-40")}
+      className={cn("flex max-h-full w-[19rem] shrink-0 flex-col rounded-[2rem] border bg-card/70 shadow-card backdrop-blur-sm dark:bg-card", isDragging && "opacity-40")}
       aria-label={`Lista ${list.name}`}
     >
       <header className="flex items-center gap-2 px-4 pb-3 pt-4">
@@ -342,7 +343,7 @@ function ListColumn({
             />
           ))}
         </SortableContext>
-        {cardIds.length === 0 && <div className="rounded-2xl border border-dashed py-8 text-center text-xs text-muted-foreground">Sin tarjetas</div>}
+        {cardIds.length === 0 && <div className="relative rounded-2xl border border-dashed py-8 text-center text-xs text-muted-foreground"><Illustration kind="tasks" className="absolute top-1/2 left-3 h-10 w-11 -translate-y-1/2 opacity-60" />Sin tarjetas</div>}
       </div>
       {canEdit && <AddCard listId={list.id} boardId={boardId} open={adding} setOpen={setAdding} />}
     </section>

@@ -1,5 +1,7 @@
 "use client";
 
+import { BRAND_NAME } from "@/lib/brand";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, LogOut, Menu as MenuIcon, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sun,
@@ -36,7 +38,8 @@ function subscribeMini(cb: () => void) {
 }
 function readMini() {
   try {
-    return localStorage.getItem(MINI_KEY) === "1";
+    // Sin preferencia guardada, arranca como riel de íconos.
+    return localStorage.getItem(MINI_KEY) !== "0";
   } catch {
     return false;
   }
@@ -61,7 +64,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: ReactN
 function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const mini = useSyncExternalStore(subscribeMini, readMini, () => false);
+  const mini = useSyncExternalStore(subscribeMini, readMini, () => true);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
@@ -94,7 +97,7 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-[transform,width] md:static md:translate-x-0 md:rounded-[1.75rem] md:border",
           navOpen ? "translate-x-0" : "-translate-x-full",
-          mini && "md:w-[4.75rem]",
+          mini && "md:w-[5rem] md:rounded-none md:border-0 md:bg-transparent md:shadow-none",
         )}
         aria-label="Navegación principal"
       >
@@ -152,7 +155,9 @@ function NavLink({ href, icon: Icon, label, active, mini }: { href: string; icon
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/25 hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-        mini && "md:justify-center md:px-0",
+        mini &&
+          "md:mx-auto md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent md:p-0 md:shadow-none md:hover:bg-sidebar-accent/70",
+        mini && active && "md:bg-sidebar-primary md:shadow-lg md:shadow-primary/30 md:hover:bg-sidebar-primary",
       )}
     >
       <Icon className="size-[1.1rem] shrink-0" /> <span className={cn(mini && "md:hidden")}>{label}</span>
@@ -182,10 +187,10 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
   return (
     <div className="flex h-full flex-col">
       <div className={cn("flex items-center justify-between gap-2 px-5 pt-5 pb-4", mini && "md:flex-col md:px-0")}>
-        <Link href="/dashboard" className="flex items-center gap-2.5" aria-label="Tableros, inicio">
+        <Link href="/dashboard" className="flex items-center gap-2.5" aria-label={`${BRAND_NAME}, inicio`}>
           <Logo className="size-9 shrink-0" />
           <span className={cn("leading-tight", mini && "md:hidden")}>
-            <span className="block text-lg font-bold tracking-tight text-foreground">Tableros</span>
+            <span className="block text-lg font-bold tracking-tight text-foreground">{BRAND_NAME}</span>
             <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
           </span>
         </Link>
@@ -203,7 +208,7 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         )}
       </nav>
 
-      <div className={cn("mx-5 my-4 border-t", mini && "md:mx-4")} />
+      <div className={cn("mx-5 my-4 border-t", mini && "md:mx-6")} />
 
       {mini && (
         <ul className="hidden min-h-0 flex-1 flex-col items-center gap-1.5 overflow-y-auto pb-4 scroll-thin md:flex" aria-label="Tableros">
@@ -214,12 +219,12 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
                 title={b.name}
                 aria-label={b.name}
                 className={cn(
-                  "relative flex size-10 items-center justify-center rounded-xl text-sm font-bold hover:bg-sidebar-accent",
-                  pathname === `/b/${b.id}` && "bg-sidebar-accent text-sidebar-accent-foreground",
+                  "relative flex size-11 items-center justify-center rounded-full border text-sm font-semibold hover:bg-sidebar-accent",
+                  pathname === `/b/${b.id}` && "border-primary/60 bg-primary-soft text-sidebar-accent-foreground",
                 )}
               >
                 {b.name.slice(0, 1).toUpperCase()}
-                <span className={cn("absolute right-1.5 bottom-1.5 size-2 rounded-full ring-2 ring-sidebar", SWATCH[asColor(b.color)])} aria-hidden />
+                <span className={cn("absolute right-0.5 bottom-0.5 size-2.5 rounded-full ring-2 ring-background", SWATCH[asColor(b.color)])} aria-hidden />
               </Link>
             </li>
           ))}
@@ -283,15 +288,15 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         </div>
       </div>
 
-      <div className={cn("m-3 overflow-hidden rounded-2xl border bg-card", mini && "md:mx-2")}>
+      <div className={cn("m-3 overflow-hidden rounded-2xl border bg-card", mini && "md:mx-auto md:mb-5 md:w-11 md:overflow-visible md:rounded-none md:border-0 md:bg-transparent")}>
         <Menu>
           <MenuTrigger asChild>
             <button
-              className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted", mini && "md:justify-center md:px-0")}
+              className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted", mini && "md:justify-center md:p-0 md:hover:bg-transparent")}
               aria-label={`Organización: ${currentOrg?.name ?? "sin organización"}`}
               title={mini ? currentOrg?.name : undefined}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary">
+              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary", mini && "md:size-11 md:rounded-full")}>
                 {(currentOrg?.name ?? "?").slice(0, 1).toUpperCase()}
               </span>
               <span className={cn("min-w-0 flex-1", mini && "md:hidden")}>
@@ -324,13 +329,13 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         <div
           className={cn(
             "flex items-center justify-between border-t px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
-            mini && "md:flex-col md:gap-2 md:px-0",
+            mini && "md:mt-3 md:flex-col md:gap-3 md:border-0 md:p-0",
           )}
         >
-          <button onClick={logout} className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Salir" title="Salir">
+          <button onClick={logout} className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Salir" title="Salir">
             <LogOut className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Salir</span>
           </button>
-          <Link href="/settings" className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Mi cuenta" title={user.email}>
+          <Link href="/settings" className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Mi cuenta" title={user.email}>
             <UserRound className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Mi cuenta</span>
           </Link>
         </div>

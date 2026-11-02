@@ -54,6 +54,6 @@ describe("utilidades de seguridad", () => {
     expect(passwordSchema.safeParse("corta").success).toBe(false);
     expect(passwordSchema.safeParse("password123").success).toBe(false);
     expect(passwordSchema.safeParse("aaaaaaaaaaaa").success).toBe(false);
-    expect(passwordSchema.safeParse("caballo-bateria-grapa").success).toBe(true);
+    expect(passwordSchema.safeParse("Caballo-bateria-grapa7").success).toBe(true);
   });
 });

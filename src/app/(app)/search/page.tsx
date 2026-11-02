@@ -58,7 +58,7 @@ function SearchContent() {
   const boards = tree.data?.workspaces.filter((w) => !get("workspaceId") || w.id === get("workspaceId")).flatMap((w) => w.boards) ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+    <div className="search-scene w-full px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader title="Búsqueda" subtitle="Encontrá tareas en todos tus tableros." />
       <Card className="mb-6 space-y-3 p-4">
         <div className="relative">
@@ -127,7 +127,7 @@ function SearchContent() {
           ))}
         </div>
       )}
-      {result.data && result.data.cards.length === 0 && <EmptyState icon={<SearchIcon />} title="Sin resultados" description="Probá con otras palabras o quitá filtros." />}
+      {result.data && result.data.cards.length === 0 && <EmptyState illustration="search" title="Sin resultados" description="Probá con otras palabras o quitá filtros." />}
       {result.data && result.data.cards.length > 0 && (
         <Card>
           <ul className="divide-y divide-border">

@@ -78,7 +78,7 @@ export default function OrgSettingsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8">
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader title="Ajustes de la organización" subtitle={org.data?.name} />
       <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
         <TabPanel value="members" className="space-y-4">
@@ -164,7 +164,7 @@ function GeneralSettings({ orgId, name, role }: { orgId: string; name: string; r
   });
   const isAdmin = role === "owner" || role === "admin";
   return (
-    <div className="space-y-6">
+    <div className="grid items-start gap-6 xl:grid-cols-2">
       <Card className="space-y-4 p-6">
         <Field label="Nombre de la organización" htmlFor="org-name">
           <Input id="org-name" value={value} disabled={!isAdmin} onChange={(e) => setValue(e.target.value)} maxLength={80} />
