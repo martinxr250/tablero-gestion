@@ -7,7 +7,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useOrg, useSyncOrg } from "@/components/shell/org-context";
-import { AvatarStack } from "@/components/ui/user-avatar";
+import { Avatar, AvatarStack } from "@/components/ui/user-avatar";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, Menu, MenuContent, MenuItem, MenuTrigger, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
 import { Button, ErrorState, Input, Select, Skeleton, Spinner } from "@/components/ui/primitives";
 import { describeActivity } from "@/lib/activity";
@@ -146,7 +147,7 @@ export function BoardView({ boardId }: { boardId: string }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl">{data.board.name}</h1>
+              <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{data.board.name}</h1>
               <span className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
                 {data.board.visibility === "private" ? <Lock className="size-3" /> : <Users className="size-3" />}
                 {data.board.visibility === "private" ? "Privado" : "Espacio"}
@@ -335,31 +336,52 @@ function ActivityDialog({ boardId, onOpenCard, onClose }: { boardId: string; onO
     queryFn: ({ pageParam }) => api<{ entries: Activity[]; nextBefore: number | null }>(`/boards/${boardId}/activity${pageParam ? `?before=${pageParam}` : ""}`),
     getNextPageParam: (last) => last.nextBefore,
   });
+  const entries = q.data?.pages.flatMap((p) => p.entries) ?? [];
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Actividad del tablero">
-      {q.isLoading && <Spinner />}
-      <ul className="space-y-3">
-        {q.data?.pages.flatMap((p) => p.entries).map((a) => (
-          <li key={a.id} className="text-sm">
-            <strong className="font-medium">{a.actorName ?? "Alguien"}</strong>{" "}
-            {a.cardId ? (
-              <button className="text-left text-muted-foreground hover:underline" onClick={() => onOpenCard(a.cardId!)}>
-                {describeActivity(a)}
-              </button>
-            ) : (
-              <span className="text-muted-foreground">{describeActivity(a)}</span>
-            )}
-            <span className="block text-xs text-muted-foreground" title={fmtDateTime(a.createdAt)}>
-              {ago(a.createdAt)}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {q.hasNextPage && (
-        <Button variant="secondary" className="mt-4" loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
-          Cargar más
-        </Button>
-      )}
-    </Dialog>
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="left" className="w-full gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b px-6 py-5">
+          <SheetTitle className="flex items-center gap-2 text-lg font-bold">
+            <ActivityIcon className="size-5 text-primary" /> Actividad del tablero
+          </SheetTitle>
+          <SheetDescription>Todos los cambios, del más reciente al más antiguo.</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 scroll-thin">
+          {q.isLoading && <Spinner />}
+          {!q.isLoading && entries.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay actividad.</p>}
+          <ol className="relative space-y-5 border-l pl-6">
+            {entries.map((a) => (
+              <li key={a.id} className="relative text-sm">
+                <span className="absolute top-0 -left-[2.4rem]">
+                  <Avatar user={{ userId: a.actorId ?? String(a.id), name: a.actorName ?? "?" }} size={28} />
+                </span>
+                <strong className="font-semibold">{a.actorName ?? "Alguien"}</strong>{" "}
+                {a.cardId ? (
+                  <button
+                    className="text-left text-muted-foreground hover:text-foreground hover:underline"
+                    onClick={() => {
+                      onClose();
+                      onOpenCard(a.cardId!);
+                    }}
+                  >
+                    {describeActivity(a)}
+                  </button>
+                ) : (
+                  <span className="text-muted-foreground">{describeActivity(a)}</span>
+                )}
+                <span className="mt-0.5 block text-xs text-muted-foreground" title={fmtDateTime(a.createdAt)}>
+                  {ago(a.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {q.hasNextPage && (
+            <Button variant="secondary" className="mt-6 w-full" loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
+              Cargar más
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,99 +1,177 @@
+<div align="center">
+
+<img src="public/icon.svg" width="72" alt="Logo de Tableros" />
+
 # Tableros
 
-Plataforma de gestión de proyectos y tareas con tableros Kanban: organizaciones, espacios de trabajo, tableros, tarjetas con checklists, comentarios con menciones, adjuntos, notificaciones, actividad, dashboard y búsqueda. Pensada para correr **gratis** en **Vercel (Hobby) + Supabase (Free)**.
+**Gestión de proyectos y tareas con tableros Kanban, pensada para equipos chicos.**
 
-- **Stack:** Next.js 16 (App Router) · TypeScript · Postgres (Supabase) · Drizzle ORM · shadcn/ui (Radix) · lucide-react · TanStack Query · dnd-kit · TipTap.
-- **Sin claves en el navegador:** el front solo habla con `/api/v1`; la base, el storage y el correo se usan desde el servidor.
-- **Autenticación propia con JWT** (Ed25519) en cookies `HttpOnly`, refresh token rotativo con detección de reutilización, MFA TOTP opcional.
+Organizá el trabajo en columnas, asigná responsables y fechas, conversá en cada tarea y seguí el avance del equipo desde un solo lugar.
+
+![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ecf8e?logo=supabase&logoColor=white)
+![shadcn/ui](https://img.shields.io/badge/UI-shadcn%2Fui-111?logo=shadcnui)
+![Tests](https://img.shields.io/badge/tests-50%20integración-5b4ee6)
+
+</div>
+
+![Tablero Kanban](docs/screenshots/board.png)
+
+## ¿Qué es?
+
+Tableros es una aplicación web para organizar proyectos con el método Kanban. Cada equipo tiene su **organización**, la divide en **espacios de trabajo** (por área o cliente) y dentro de cada uno arma **tableros** con columnas y tarjetas. Cada tarjeta concentra todo lo que hace falta para avanzar: responsable, fecha, prioridad, checklist, archivos y la conversación del equipo.
+
+Está construida como un producto completo: autenticación propia, permisos por rol, aislamiento de datos entre organizaciones, auditoría, modo claro y oscuro, diseño responsive y accesibilidad por teclado. Corre de forma **gratuita** sobre Vercel + Supabase.
+
+## Capturas
+
+| Inicio | Detalle de tarjeta |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Tarjeta](docs/screenshots/card.png) |
+
+| Actividad del tablero | Búsqueda con filtros |
+|---|---|
+| ![Actividad](docs/screenshots/activity.png) | ![Búsqueda](docs/screenshots/search.png) |
+
+| Modo oscuro | Celular | Inicio de sesión |
+|---|---|---|
+| ![Modo oscuro](docs/screenshots/board-dark.png) | <img src="docs/screenshots/mobile.png" width="220" alt="Vista en celular" /> | ![Login](docs/screenshots/login.png) |
+
+## Funcionalidades
+
+**Tableros Kanban**
+- Columnas y tarjetas con arrastrar y soltar (mouse y teclado), reordenamiento de columnas y colores por lista.
+- Filtros por persona, etiqueta, prioridad y vencimiento; barra de progreso del tablero.
+- Archivado y restauración de listas y tarjetas.
+
+**Tarjetas**
+- Descripción con texto enriquecido, prioridad, responsable, colaboradores, etiquetas y fecha de vencimiento.
+- Checklists con progreso, archivos adjuntos (imágenes, PDF, Office, texto), relaciones entre tareas (bloquea, relacionada, duplica).
+- Comentarios con **@menciones** e historial completo de cambios.
+
+**Colaboración**
+- Organizaciones, espacios de trabajo y tableros con roles y **invitaciones por correo**.
+- Notificaciones internas (asignaciones, menciones, comentarios, vencimientos próximos).
+- Actualización casi en tiempo real: los cambios de otras personas aparecen solos y se resaltan.
+- Panel de actividad por tablero y registro de auditoría por organización.
+
+**Seguimiento**
+- Inicio con tareas pendientes, vencidas, por vencer y completadas, gráfico de ritmo semanal, tableros activos y actividad reciente.
+- Búsqueda global (⌘K) y búsqueda avanzada por organización, espacio, tablero, persona, estado, prioridad y fecha.
+
+**Cuenta y seguridad**
+- Registro con verificación de correo, recuperación de contraseña, verificación en dos pasos (TOTP) con códigos de recuperación.
+- Gestión de sesiones abiertas, cambio de contraseña y eliminación de cuenta.
+
+## Casos de uso
+
+- **Equipo de marketing** que planifica una campaña: columnas *Por hacer / En curso / Revisión / Hecho*, piezas con fecha de entrega, checklist de entregables y archivos adjuntos.
+- **Grupo de amigos o estudio chico** que organiza un proyecto en común: cada uno ve sus tareas en el inicio y recibe aviso cuando lo mencionan o algo está por vencer.
+- **Freelancer con clientes**: un espacio de trabajo por cliente y tableros privados; el cliente entra como **invitado** y solo ve su tablero.
+- **Equipo de desarrollo** que lleva un backlog: prioridades, relaciones de bloqueo entre tareas y búsqueda por etiqueta o responsable.
+- **Coordinación de un evento**: fechas de vencimiento, recordatorios automáticos y el historial de quién cambió qué.
+
+## Roles y permisos
+
+| Organización | Puede |
+|---|---|
+| **Dueño** | Todo, incluido eliminar la organización y nombrar otros dueños |
+| **Administrador** | Gestionar miembros, invitaciones, espacios y ver la auditoría |
+| **Miembro** | Crear espacios y tableros, trabajar en los tableros a los que accede |
+| **Invitado** | Solo los tableros a los que lo agregan |
+
+En cada tablero: **Administrador** (configura y gestiona miembros) · **Editor** (crea y mueve tarjetas) · **Comentarista** (comenta) · **Lector** (solo ve). Todos los permisos se validan en el servidor.
+
+## Tecnologías
+
+| Capa | Tecnología |
+|---|---|
+| Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript estricto |
+| Interfaz | [shadcn/ui](https://ui.shadcn.com) (Radix) · Tailwind CSS v4 · [lucide-react](https://lucide.dev) · Plus Jakarta Sans |
+| Interacción | [dnd-kit](https://dndkit.com) (drag & drop accesible) · [TipTap](https://tiptap.dev) (texto enriquecido) · [Recharts](https://recharts.org) · cmdk |
+| Datos en cliente | TanStack Query |
+| Base de datos | PostgreSQL ([Supabase](https://supabase.com)) · [Drizzle ORM](https://orm.drizzle.team) · migraciones SQL versionadas |
+| Autenticación | JWT propio con [jose](https://github.com/panva/jose) (Ed25519) · Argon2id · TOTP (otplib) |
+| Validación | Zod (también genera el OpenAPI) |
+| Archivos | Supabase Storage (bucket privado) |
+| Correo | SMTP (Nodemailer) |
+| Tests | Vitest (integración contra Postgres real) · Playwright |
+| CI/CD | GitHub Actions · Gitleaks · Semgrep · OSV-Scanner · Dependabot · Vercel |
 
 ## Arquitectura
 
 ```
-Navegador (React, sin secretos)
-   │ cookies HttpOnly (__Host-faro_at / __Host-faro_rt)
+Navegador (React, sin claves ni secretos)
+   │  cookies HttpOnly
    ▼
-proxy.ts ── CSP con nonce + headers de seguridad
+proxy.ts ── CSP con nonce y headers de seguridad
    ▼
-Next.js (monolito modular)
-   ├─ app/(auth), app/(app)        UI
-   └─ app/api/v1/[...path]          API única → src/server/api/router.ts
-          CSRF (Origin) · auth JWT + sesión · rate limit · Zod · errores seguros · OpenAPI
-          └─ src/server/modules/*   auth · me · orgs · workspaces · boards · cards · insights · cron
+Next.js — monolito modular
+   ├─ app/(auth), app/(app)          pantallas
+   └─ app/api/v1/[...path]            API única → src/server/api/router.ts
+          CSRF · autenticación · rate limit · validación · errores seguros · OpenAPI
+          └─ src/server/modules/*    auth · perfil · organizaciones · espacios · tableros · tarjetas · dashboard · cron
    ▼
-Postgres (esquema app, RLS)   Supabase Storage (bucket privado)   SMTP   Vercel Cron
+PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron
 ```
 
-### Aislamiento multi‑tenant (defensa en capas)
+- **El navegador solo habla con la API propia.** La base de datos, el almacenamiento y el correo se usan exclusivamente desde el servidor.
+- **Aislamiento entre organizaciones en capas:** autorización central, *Row-Level Security* de Postgres (cada request corre con un rol sin privilegios y el usuario en contexto) y claves foráneas compuestas por organización.
+- **Una sola fuente de verdad para los permisos:** el rol efectivo en cada tablero lo resuelve una función SQL.
+- La documentación de la API está en `/docs/api` y la especificación en `/api/v1/openapi.json`.
 
-1. El tenant se deriva **del recurso**, nunca de lo que manda el cliente.
-2. `authorize` central (`src/server/modules/access.ts`) con matriz rol → acción.
-3. Cada request corre en una transacción con `SET LOCAL ROLE app_rw` + `app.user_id`: **Row‑Level Security** filtra por organización aunque una consulta olvide hacerlo.
-4. **FKs compuestas** `(org_id, id)`: un hijo no puede apuntar a un padre de otra organización.
-5. El rol efectivo en un tablero lo resuelve una única función SQL (`app.resolve_board_role`).
-6. Tests BOLA/IDOR sobre más de 30 endpoints (`tests/integration/tenancy.test.ts`).
+## Seguridad
 
-### Roles
+- Contraseñas con Argon2id, bloqueo temporal tras intentos fallidos y mensajes que no revelan si una cuenta existe.
+- Access token de 10 minutos y refresh token rotativo; reutilizar uno viejo revoca la sesión. Cerrar sesión o cambiar la contraseña invalida los tokens al instante.
+- Protección CSRF (cookies `SameSite` + validación de `Origin`), CSP estricta, validación de toda entrada y texto enriquecido con lista blanca (sin HTML).
+- Adjuntos validados por su contenido real, con tamaño máximo, nombres saneados, almacenamiento privado y descarga solo con permiso.
+- Auditoría inmutable de eventos sensibles; los logs nunca guardan contraseñas, tokens ni cookies.
+- Políticas de retención automáticas y CI que bloquea vulnerabilidades altas o críticas.
 
-| | Dueño | Admin | Miembro | Invitado |
-|---|---|---|---|---|
-| Organización | todo, eliminar | miembros, invitaciones, auditoría | crear espacios y tableros | solo tableros puntuales |
+## Empezar en local
 
-Tablero: **Administrador** (configura, miembros) · **Editor** (listas y tarjetas) · **Comentarista** · **Lector**. Dueños y admins de la organización acceden a todo (queda auditado).
-
-## Desarrollo local
-
-Requisitos: Node 22+, pnpm, Docker.
+Requisitos: Node 22+, pnpm y Docker.
 
 ```bash
 pnpm install
 pnpm run setup:dev   # genera .env.local con claves nuevas, levanta Postgres y migra
-pnpm dev
+pnpm dev             # http://localhost:3000
 ```
 
-En desarrollo los correos (verificación, invitaciones, reset) se guardan como JSON en `.data/mail/` y los adjuntos en `.data/uploads/`.
+En desarrollo los correos (verificación, invitaciones, recuperación) se guardan en `.data/mail/` y los adjuntos en `.data/uploads/`.
 
 ```bash
-pnpm test        # 50+ tests de integración contra Postgres real (base faro_test)
+pnpm test                    # tests de integración (auth, aislamiento, permisos, kanban, archivos)
 pnpm lint && pnpm typecheck && pnpm build
 ```
 
-La documentación de la API está en `/docs/api` (y el OpenAPI en `/api/v1/openapi.json`).
+Las capturas de este README se regeneran con `scripts/screenshots.mts`.
 
-## Despliegue gratis (Vercel + Supabase)
+## Desplegar gratis (Vercel + Supabase)
 
-1. **Supabase**: creá un proyecto (plan Free). En *Project Settings → Database* copiá:
-   - la cadena del **pooler en modo transacción** (puerto 6543) → `DATABASE_URL`
-   - la conexión **directa** (puerto 5432) → `MIGRATION_DATABASE_URL`
-2. **Migraciones** (desde tu máquina):
-   ```bash
-   MIGRATION_DATABASE_URL="postgres://..." pnpm db:migrate
-   ```
-   Las tablas viven en el esquema `app`, que la Data API de Supabase **no expone**.
-3. **Storage**: copiá la *service role / secret key* y creá el bucket privado:
-   ```bash
-   SUPABASE_URL=https://xxxx.supabase.co SUPABASE_SERVICE_ROLE_KEY=... pnpm storage:setup
-   ```
-4. **Claves**: generá un juego nuevo (no reutilices las de desarrollo):
-   ```bash
-   pnpm tsx scripts/setup-env.ts .env.production.local
-   ```
-5. **Correo**: con Gmail, activá la verificación en dos pasos y creá una *contraseña de aplicación*; usala en `SMTP_PASS` (`MAIL_DRIVER=smtp`).
-6. **Vercel**: importá el repo y cargá las variables de `.env.example` (`APP_URL` con `https://`, `STORAGE_DRIVER=supabase`, `MAIL_DRIVER=smtp`, `CRON_SECRET`). El cron diario (`vercel.json`) envía avisos de vencimiento y aplica la retención.
+1. **Supabase:** creá un proyecto y copiá la cadena del *pooler* en modo transacción (puerto 6543) como `DATABASE_URL` y la conexión directa (5432) como `MIGRATION_DATABASE_URL`.
+2. **Migraciones:** `MIGRATION_DATABASE_URL="postgres://…" pnpm db:migrate`. Las tablas quedan en el esquema `app`, que la API pública de Supabase no expone.
+3. **Archivos:** `SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… pnpm storage:setup` crea el bucket privado.
+4. **Claves:** `pnpm tsx scripts/setup-env.ts .env.production.local` genera un juego nuevo (no reutilices las de desarrollo).
+5. **Correo:** con Gmail, activá la verificación en dos pasos y usá una *contraseña de aplicación* en `SMTP_PASS`.
+6. **Vercel:** importá el repositorio y cargá las variables de [`.env.example`](.env.example) (`APP_URL` con `https://`, `STORAGE_DRIVER=supabase`, `MAIL_DRIVER=smtp`, `CRON_SECRET`). El cron diario de [`vercel.json`](vercel.json) envía los avisos de vencimiento y aplica la retención.
 
-> El plan Hobby de Vercel es para uso no comercial. Un proyecto gratuito de Supabase se pausa tras 7 días sin actividad.
+> El plan Hobby de Vercel es para uso no comercial y un proyecto gratuito de Supabase se pausa tras 7 días sin actividad.
 
-## Seguridad
+## Estructura
 
-- Argon2id (OWASP), bloqueo tras 5 intentos, respuestas genéricas (sin enumeración de cuentas).
-- Access JWT de 10 min + refresh opaco de 14 días, rotado en cada uso; reutilizarlo revoca la sesión. Revocación inmediata (cerrar sesión, cambiar contraseña).
-- CSRF: `SameSite=Lax` + validación de `Origin` en toda mutación. CSP estricta con nonce.
-- Validación con Zod en todas las entradas; texto enriquecido guardado como JSON con lista blanca (sin HTML).
-- Adjuntos: tipo validado por contenido (magic bytes), máx. 4 MB, nombres saneados, bucket privado, descarga solo con permiso y `Content-Disposition: attachment` + `nosniff` + `sandbox`. Consulta opcional del hash en VirusTotal.
-- Auditoría append-only (login, MFA, roles, invitaciones, accesos administrativos); los logs redactan contraseñas, tokens y cookies.
-- Retención: archivados 90 días, organizaciones eliminadas 30 días, auditoría 1 año.
-- CI: lint, tipos, tests, build, Gitleaks, Semgrep, OSV-Scanner y `pnpm audit` (bloquea high/critical).
+```
+db/migrations/        esquema, RLS y funciones SQL
+src/app/              pantallas (auth y app) y la ruta única de la API
+src/components/       interfaz (shell, tablero, tarjeta, miembros, ui de shadcn)
+src/server/           API: router, auth, módulos de dominio, correo y storage
+tests/                tests de integración y unitarios
+scripts/              migraciones, entorno, storage y capturas
+```
 
-### Riesgos aceptados
+## Limitaciones conocidas
 
-- Sin escaneo antimalware completo de archivos (no hay un servicio gratuito que no exponga el archivo); se mitiga con lista blanca de tipos, validación por contenido y descarga forzada.
-- La actualización “en tiempo real” es por sondeo cada 4 s (Vercel no mantiene WebSockets y se evitó exponer claves de Supabase Realtime en el navegador).
+- La actualización en vivo es por sondeo cada 4 segundos (Vercel no mantiene WebSockets y se evita exponer claves en el navegador).
+- No hay escaneo antimalware completo de adjuntos; se mitiga validando el tipo real del archivo, limitando formatos y forzando la descarga.
