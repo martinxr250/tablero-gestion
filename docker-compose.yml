@@ -1,0 +1,19 @@
+# Postgres local para desarrollo y tests (en producción se usa Supabase).
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: faro
+    ports:
+      - "54329:5432"
+    volumes:
+      - faro-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  faro-db:
