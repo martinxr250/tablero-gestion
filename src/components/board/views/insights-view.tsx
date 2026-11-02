@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CircleCheck, CircleX, Clock, GitPullRequest, Loader, ShieldCheck } from "lucide-react";
-import { ErrorState, Skeleton } from "@/components/ui/primitives";
+import { Button, ErrorState, Skeleton } from "@/components/ui/primitives";
 import { Avatar } from "@/components/ui/user-avatar";
 import { api } from "@/lib/api";
 import { ago, fmtShort } from "@/lib/format";
@@ -16,7 +16,11 @@ type Insights = {
   qa: { id: string; title: string; status: string; note: string | null }[];
   sprint: { id: string; name: string; endsOn: string; capacityPoints: number | null; totalPoints: number; donePoints: number; cards: number; cardsDone: number } | null;
   summary: { total: number; done: number; overdue: number; blocked: number; pendingDelivery: number; openReviews: number; sprintsAtRisk: number };
-  health: { withOpenPr: number; waitingReview: number; checksFailing: number; merged: number; readyForQa: number; approved: number; completed30d: number };
+  health: {
+    withOpenPr: number; waitingReview: number; checksFailing: number; merged: number; readyForQa: number; approved: number; completed30d: number;
+    pendingDeploy: number; deploying: number; deployed: number; deployFailed: number; readyDelivery: number; blockedDelivery: number;
+  };
+  deploys: { id: string; title: string; status: "pending" | "in_progress" | "failed" }[];
   dependencies: { chains: { id: string; title: string; depth: number }[]; critical: { id: string; title: string; dependents: number }[]; cycles: { id: string; title: string }[] };
   sprints: { id: string; name: string; status: string; endsOn: string; level: "low" | "medium" | "high" | "insufficient"; reasons: string[]; remainingPoints: number; daysLeft: number }[];
   people: { userId: string; name: string; points: number; unestimated: number; capacity: number | null; status: "ok" | "near" | "over" | "unknown" }[];
@@ -153,6 +157,11 @@ export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: stri
                 ["Listas para QA", d.health.readyForQa],
                 ["Aprobadas", d.health.approved],
                 ["Completadas (30 d)", d.health.completed30d],
+                ["Pendientes de despliegue", d.health.pendingDeploy],
+                ["Desplegadas", d.health.deployed],
+                ["Despliegue fallido", d.health.deployFailed],
+                ["Entregas listas", d.health.readyDelivery],
+                ["Entregas bloqueadas", d.health.blockedDelivery],
               ] as const
             ).map(([label, value]) => (
               <div key={label} className="rounded-2xl bg-muted/60 p-3">
@@ -161,7 +170,21 @@ export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: stri
               </div>
             ))}
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">Código fusionado no significa desplegado: Tableros no recibe datos de despliegue.</p>
+          {d.deploys.length > 0 && (
+            <ul className="mt-4 space-y-1 text-sm">
+              {d.deploys.map((t) => (
+                <li key={t.id} className="flex items-center gap-2">
+                  <span className={cn("w-28 shrink-0 text-xs", t.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
+                    {t.status === "failed" ? "Despliegue fallido" : t.status === "in_progress" ? "Desplegando" : "Sin desplegar"}
+                  </span>
+                  <button className="truncate text-left hover:text-primary" onClick={() => onOpenCard(t.id)}>
+                    {t.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">Código fusionado no significa desplegado: solo cuenta como desplegado cuando hay un despliegue a producción confirmado que incluye ese código.</p>
         </section>
 
         <section className="rounded-[2rem] border bg-card p-6">
@@ -190,6 +213,8 @@ export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: stri
           )}
         </section>
       </div>
+
+      <DeploymentHistory boardId={boardId} canSync={canManage} onOpenCard={onOpenCard} />
 
       <div className="mb-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <section className="rounded-[2rem] border bg-card p-6">
@@ -364,5 +389,100 @@ export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: stri
         </section>
       </div>
     </div>
+  );
+}
+
+type DeployRow = {
+  id: string; sha: string; ref: string | null; environment: string; envKind: string; state: string; url: string | null;
+  startedAt: string | null; finishedAt: string | null; repo: string; cards: { id: string; title: string }[];
+};
+const DEPLOY_STATE: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pendiente", cls: "bg-muted text-muted-foreground" },
+  building: { label: "En construcción", cls: LEVEL.medium.cls },
+  deploying: { label: "Desplegando", cls: LEVEL.medium.cls },
+  deployed: { label: "Desplegado", cls: LEVEL.low.cls },
+  failed: { label: "Falló", cls: LEVEL.high.cls },
+  canceled: { label: "Cancelado", cls: "bg-muted text-muted-foreground" },
+  unknown: { label: "Desconocido", cls: "bg-muted text-muted-foreground" },
+};
+const ENV_LABEL: Record<string, string> = { production: "Producción", staging: "Staging", preview: "Preview", other: "Otro" };
+
+/** Historial de despliegues del repositorio del tablero (solo si hay alguno registrado). */
+function DeploymentHistory({ boardId, canSync, onOpenCard }: { boardId: string; canSync: boolean; onOpenCard: (id: string) => void }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["deployments", boardId], queryFn: () => api<{ deployments: DeployRow[] }>(`/boards/${boardId}/deployments`) });
+  const sync = useMutation({
+    mutationFn: () => api<{ synced: number }>(`/boards/${boardId}/repo/deployments/sync`, { method: "POST" }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["deployments", boardId] });
+      qc.invalidateQueries({ queryKey: ["insights", boardId] });
+    },
+  });
+  if (!q.data) return null;
+  return (
+    <section className="mb-6 rounded-[2rem] border bg-card p-6">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h2 className="flex-1 text-lg">Despliegues</h2>
+        {canSync && (
+          <Button size="sm" variant="secondary" loading={sync.isPending} onClick={() => sync.mutate()}>
+            Conciliar con GitHub
+          </Button>
+        )}
+      </div>
+      {q.data.deployments.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Sin despliegues registrados. Llegan desde GitHub Deployments (por ejemplo, la integración de Vercel con GitHub) cuando el tablero tiene un repositorio vinculado.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Entorno</th>
+                <th className="py-2 pr-3 font-medium">Estado</th>
+                <th className="py-2 pr-3 font-medium">Commit</th>
+                <th className="py-2 pr-3 font-medium">Inicio</th>
+                <th className="py-2 pr-3 font-medium">Fin</th>
+                <th className="py-2 font-medium">Tarjetas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {q.data.deployments.map((d) => {
+                const st = DEPLOY_STATE[d.state] ?? DEPLOY_STATE.unknown!;
+                return (
+                  <tr key={d.id}>
+                    <td className="py-2 pr-3">{ENV_LABEL[d.envKind] ?? d.environment}</td>
+                    <td className="py-2 pr-3">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", st.cls)}>{st.label}</span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      {d.url ? (
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-mono text-xs hover:text-primary">
+                          {d.sha.slice(0, 7)}
+                        </a>
+                      ) : (
+                        <code className="text-xs">{d.sha.slice(0, 7)}</code>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-muted-foreground">{d.startedAt ? ago(d.startedAt) : "—"}</td>
+                    <td className="py-2 pr-3 text-xs text-muted-foreground">{d.finishedAt ? ago(d.finishedAt) : "—"}</td>
+                    <td className="py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {d.cards.map((c) => (
+                          <button key={c.id} className="max-w-48 truncate rounded-full bg-muted px-2 py-0.5 text-xs hover:text-primary" onClick={() => onOpenCard(c.id)}>
+                            {c.title}
+                          </button>
+                        ))}
+                        {d.cards.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

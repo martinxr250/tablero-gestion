@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CircleCheck, CircleDot, CircleX, Clock, ExternalLink, GitMerge, GitPullRequest, Link2Off, Loader } from "lucide-react";
+import { AlertTriangle, CircleCheck, CircleDot, CircleX, Clock, ExternalLink, GitMerge, GitPullRequest, Link2Off, Loader, Rocket } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Input } from "@/components/ui/primitives";
@@ -9,8 +9,11 @@ import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+type Deploy = { envKind: "preview" | "staging" | "production" | "other"; environment: string; state: string; url: string | null; sha: string; finishedAt: string | null; startedAt: string | null };
 type Dev = {
   repo: { id: string; provider: string; fullName: string } | null;
+  deployments: Deploy[];
+  lastProductionDeployAt: string | null;
   issue: {
     number: number;
     url: string;
@@ -32,6 +35,52 @@ const CHECKS: Record<string, { label: string; icon: typeof CircleCheck; cls: str
   pending: { label: "Checks en curso", icon: Loader, cls: "text-amber-600 dark:text-amber-300" },
 };
 const REVIEW: Record<string, string> = { approved: "Aprobado", changes_requested: "Cambios pedidos", commented: "Con comentarios" };
+const ENV: Record<Deploy["envKind"], string> = { production: "Producción", staging: "Staging", preview: "Preview", other: "Otro entorno" };
+const DEPLOY: Record<string, { label: string; cls: string; icon: typeof CircleCheck }> = {
+  pending: { label: "Pendiente", cls: "text-muted-foreground", icon: Clock },
+  building: { label: "En construcción", cls: "text-amber-600 dark:text-amber-300", icon: Loader },
+  deploying: { label: "Desplegando", cls: "text-amber-600 dark:text-amber-300", icon: Loader },
+  deployed: { label: "Desplegado", cls: "text-success", icon: CircleCheck },
+  failed: { label: "Falló", cls: "text-destructive", icon: CircleX },
+  canceled: { label: "Cancelado", cls: "text-muted-foreground", icon: CircleX },
+  unknown: { label: "Desconocido", cls: "text-muted-foreground", icon: Clock },
+};
+
+/** Estado de despliegue por entorno; solo aparece si hay evidencia vinculada. */
+function Deployments({ items, lastProd }: { items: Deploy[]; lastProd: string | null }) {
+  if (items.length === 0) return null;
+  const order = ["production", "staging", "preview", "other"];
+  return (
+    <div className="mt-2 rounded-xl border px-3 py-2.5 text-sm">
+      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <Rocket className="size-3.5" /> Despliegues
+      </p>
+      <ul className="space-y-1">
+        {[...items].sort((a, b) => order.indexOf(a.envKind) - order.indexOf(b.envKind)).map((d) => {
+          const st = DEPLOY[d.state] ?? DEPLOY.unknown!;
+          return (
+            <li key={d.envKind} className="flex flex-wrap items-center gap-2">
+              <span className="w-24 shrink-0 text-xs text-muted-foreground">{ENV[d.envKind]}</span>
+              <span className={cn("inline-flex items-center gap-1 text-xs font-medium", st.cls)}>
+                <st.icon className="size-3.5" /> {st.label}
+              </span>
+              <code className="text-[11px] text-muted-foreground">{d.sha}</code>
+              {d.finishedAt && <span className="text-xs text-muted-foreground">· {ago(d.finishedAt)}</span>}
+              {d.url && (
+                <a href={d.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-xs hover:text-primary">
+                  Ver <ExternalLink className="size-3" />
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {lastProd ? `Último despliegue a producción confirmado ${ago(lastProd)}.` : "Todavía no hay un despliegue a producción confirmado con este código."}
+      </p>
+    </div>
+  );
+}
 
 /** Sección de la tarjeta con el issue vinculado y la actividad de desarrollo (solo lectura del proveedor). */
 export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId: string; canEdit: boolean }) {
@@ -195,6 +244,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
           ))}
         </ul>
       )}
+      <Deployments items={data.deployments ?? []} lastProd={data.lastProductionDeployAt} />
       {canEdit && (
         <div className="mt-2">
           <NumberForm label="Vincular un pull request" placeholder="N.º de PR" value={pullNumber} onChange={setPullNumber} loading={linkPull.isPending} onSubmit={(n) => linkPull.mutate(n, { onSuccess: () => setPullNumber("") })} />
