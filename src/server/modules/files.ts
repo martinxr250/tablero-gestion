@@ -17,6 +17,8 @@ const BINARY_ALLOWED = new Set([
 ]);
 const TEXT_EXT: Record<string, string> = { txt: "text/plain", csv: "text/csv", md: "text/markdown" };
 export const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+/** Tipos que se pueden ver en el navegador sin descargarlos. */
+export const PREVIEW_TYPES = new Set([...IMAGE_TYPES, "application/pdf"]);
 
 /** Nombre seguro: sin rutas, sin caracteres de control, longitud acotada. */
 export function safeFileName(name: string): string {
@@ -103,7 +105,12 @@ export function downloadResponse(bytes: Uint8Array, mime: string, fileName: stri
       "Content-Length": String(bytes.length),
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+      // Los PDF se ven con el visor del navegador, que no funciona dentro de "sandbox":
+      // se les niega todo recurso externo y que se incrusten en otros sitios.
+      "Content-Security-Policy":
+        inline && mime === "application/pdf"
+          ? "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'"
+          : "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
       "Cross-Origin-Resource-Policy": "same-origin",
     },
   });

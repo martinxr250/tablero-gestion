@@ -88,30 +88,30 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
   }, []);
 
   return (
-    <div className="flex h-dvh gap-3 overflow-hidden bg-background md:p-3">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2">
         Saltar al contenido
       </a>
       {navOpen && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-[transform,width] md:static md:translate-x-0 md:rounded-[1.75rem] md:border",
+          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground transition-[transform,width] md:static md:translate-x-0 md:border-r",
           navOpen ? "translate-x-0" : "-translate-x-full",
-          mini && "md:w-[5rem] md:rounded-none md:border-0 md:bg-transparent md:shadow-none",
+          mini && "md:w-[5rem]",
         )}
         aria-label="Navegación principal"
       >
         <Sidebar user={user} mini={mini} onClose={() => setNavOpen(false)} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:px-6 md:px-2">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-sidebar px-4 sm:px-6">
           <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menú" onClick={() => setNavOpen(true)}>
             <MenuIcon />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="hidden shrink-0 rounded-full bg-card shadow-card md:inline-flex"
+            className="hidden shrink-0 md:inline-flex"
             aria-label={mini ? "Expandir menú lateral" : "Minimizar menú lateral"}
             aria-pressed={mini}
             title={`${mini ? "Expandir" : "Minimizar"} menú (⌘B)`}
@@ -121,7 +121,7 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
           </Button>
           <button
             onClick={() => setPaletteOpen(true)}
-            className="flex h-11 w-full max-w-xl items-center gap-2.5 rounded-full bg-card px-4 text-sm text-muted-foreground shadow-card transition-colors hover:text-foreground"
+            className="flex h-10 w-full max-w-xl items-center gap-2.5 rounded-xl border bg-card px-3.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
           >
             <Search className="size-4" />
             <span className="min-w-0 flex-1 truncate text-left">

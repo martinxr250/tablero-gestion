@@ -9,6 +9,7 @@ import { cardRoutes } from "../modules/cards";
 import { insightRoutes } from "../modules/insights";
 import { cronRoutes } from "../modules/cron";
 import { integrationRoutes } from "../modules/integrations";
+import { planningRoutes } from "../modules/planning";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -20,6 +21,7 @@ const domainRoutes: RouteDef[] = [
   ...insightRoutes,
   ...cronRoutes,
   ...integrationRoutes,
+  ...planningRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

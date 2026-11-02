@@ -44,6 +44,16 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "comment.deleted": return `eliminó un comentario en "${t}"`;
     case "attachment.added": return `adjuntó ${s(d.file)} en "${t}"`;
     case "attachment.removed": return `quitó ${s(d.file)} de "${t}"`;
+    case "card.recurred": return `programó la próxima "${t}"`;
+    case "card.duplicated": return `duplicó "${t}"`;
+    case "card.subtask_created": return `agregó la subtarea "${t}" a "${s(d.parent)}"`;
+    case "cards.bulk_created": return `cargó ${String(d.count ?? "")} tareas de una vez`;
+    case "qa.approved": return `aprobó "${t}" en control de calidad`;
+    case "qa.rejected": return `rechazó "${t}" en control de calidad`;
+    case "sprint.created": return `creó la etapa "${s(d.name)}"`;
+    case "sprint.started": return `inició la etapa "${s(d.name)}"`;
+    case "sprint.closed": return `cerró la etapa "${s(d.name)}"`;
+    case "sprint.deleted": return `eliminó la etapa "${s(d.name)}"`;
     case "vcs.issue_created": return `creó el issue #${String(d.number ?? "")} para "${t}"`;
     case "vcs.issue_synced": return `sincronizó "${t}" con el issue #${String(d.number ?? "")}`;
     default: return "hizo un cambio";
@@ -60,6 +70,10 @@ export function describeNotification(n: Notification): string {
     case "comment.created": return `comentó en "${card}": ${s(d.excerpt)}`;
     case "card.due_soon": return `"${card}" vence en menos de 24 horas`;
     case "board.added": return `te agregó al tablero "${s(d.boardName)}"`;
+    case "card.moved": return `movió "${card}" a ${s(d.to)}`;
+    case "card.completed": return `completó "${card}"`;
+    case "qa.approved": return `aprobó "${card}" en control de calidad`;
+    case "qa.rejected": return `rechazó "${card}": ${s(d.note)}`;
     default: return "nueva actividad";
   }
 }

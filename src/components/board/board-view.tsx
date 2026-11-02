@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity as ActivityIcon, Archive, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Filter, Flame, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, Archive, CalendarDays, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Copy, FileDown, Filter, Gauge, LayoutGrid, List as ListIcon, ListPlus, Milestone, Flame, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -19,10 +19,15 @@ import type { Activity, BoardData, CardSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BoardSettingsDialog } from "./board-settings";
 import { CardModal } from "./card-modal";
+import { BulkDialog } from "./bulk-dialog";
 import { Kanban } from "./kanban";
+import { CalendarView } from "./views/calendar-view";
+import { InsightsView } from "./views/insights-view";
+import { ListView } from "./views/list-view";
+import { SprintsView } from "./views/sprints-view";
 import type { RepoInfo } from "./repo-settings";
 
-// Preferencia "resumen del tablero contraído", guardada en el navegador.
+// Preferencia "resumen del tablero contraído", guardada en el navegador. Contraído por defecto.
 const HEADER_KEY = "tableros.boardHeaderCompact";
 const HEADER_EVENT = "tableros:board-header";
 function subscribeHeader(cb: () => void) {
@@ -35,9 +40,9 @@ function subscribeHeader(cb: () => void) {
 }
 function readHeaderCompact() {
   try {
-    return localStorage.getItem(HEADER_KEY) === "1";
+    return localStorage.getItem(HEADER_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 function setCompactHeader(value: boolean) {
@@ -47,6 +52,55 @@ function setCompactHeader(value: boolean) {
     /* almacenamiento no disponible */
   }
   window.dispatchEvent(new Event(HEADER_EVENT));
+}
+
+type ViewKey = "board" | "list" | "calendar" | "sprints" | "insights";
+const VIEWS: { key: ViewKey; label: string; icon: typeof LayoutGrid }[] = [
+  { key: "board", label: "Tablero", icon: LayoutGrid },
+  { key: "list", label: "Lista", icon: ListIcon },
+  { key: "calendar", label: "Calendario", icon: CalendarDays },
+  { key: "sprints", label: "Etapas", icon: Milestone },
+  { key: "insights", label: "Panel del líder", icon: Gauge },
+];
+
+function DuplicateBoardDialog({ data, onClose }: { data: BoardData; onClose: () => void }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [name, setName] = useState(`${data.board.name} (copia)`);
+  const [includeCards, setIncludeCards] = useState(true);
+  const [asTemplate, setAsTemplate] = useState(false);
+  const dup = useMutation({
+    mutationFn: () => api<{ id: string }>(`/boards/${data.board.id}/duplicate`, { method: "POST", body: { name, includeCards, asTemplate } }),
+    onSuccess: ({ id }) => {
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(asTemplate ? "Plantilla creada" : "Tablero duplicado");
+      onClose();
+      router.push(`/b/${id}`);
+    },
+  });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Duplicar tablero" description="Copia listas, etiquetas y la configuración de calidad. Los comentarios y archivos no se copian.">
+      <div className="space-y-4">
+        <Input aria-label="Nombre del tablero nuevo" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={includeCards} onChange={(e) => setIncludeCards(e.target.checked)} />
+          Incluir las tarjetas (con checklists y subtareas)
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={asTemplate} onChange={(e) => setAsTemplate(e.target.checked)} />
+          Guardarlo como plantilla para crear tableros nuevos
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button loading={dup.isPending} disabled={!name.trim()} onClick={() => dup.mutate()}>
+            Duplicar
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
 }
 
 const LIST_SEGMENTS = ["bg-primary text-primary-foreground", "bg-chart-2 text-primary-foreground", "bg-brand text-brand-foreground", "bg-success text-primary-foreground"];
@@ -79,9 +133,10 @@ export function BoardView({ boardId }: { boardId: string }) {
   useSyncOrg(q.data?.board.orgId);
 
   const [filters, setFilters] = useState<Filters>(EMPTY);
-  const compactHeader = useSyncExternalStore(subscribeHeader, readHeaderCompact, () => false);
+  const compactHeader = useSyncExternalStore(subscribeHeader, readHeaderCompact, () => true);
   const [highlight, setHighlight] = useState<Set<string>>(new Set());
-  const [panel, setPanel] = useState<"settings" | "archived" | "activity" | null>(null);
+  const [panel, setPanel] = useState<"settings" | "archived" | "activity" | "bulk" | "duplicate" | null>(null);
+  const view = (VIEWS.some((v) => v.key === params.get("view")) ? params.get("view") : "board") as ViewKey;
   const cursor = useRef<number | null>(null);
 
   useEffect(() => {
@@ -213,6 +268,19 @@ export function BoardView({ boardId }: { boardId: string }) {
                 </Button>
               </MenuTrigger>
               <MenuContent>
+                {canEdit && (
+                  <MenuItem onSelect={() => setPanel("bulk")}>
+                    <ListPlus /> Carga masiva de tareas
+                  </MenuItem>
+                )}
+                <MenuItem asChild>
+                  <a href={`/api/v1/boards/${data.board.id}/export`} download>
+                    <FileDown /> Exportar a planilla
+                  </a>
+                </MenuItem>
+                <MenuItem onSelect={() => setPanel("duplicate")}>
+                  <Copy /> Duplicar tablero
+                </MenuItem>
                 <MenuItem onSelect={() => setPanel("archived")}>
                   <Archive /> Elementos archivados
                 </MenuItem>
@@ -301,10 +369,38 @@ export function BoardView({ boardId }: { boardId: string }) {
           </button>
         </div>
       )}
+      <nav aria-label="Vistas del tablero" className="mb-4 flex px-4 sm:px-6">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-card p-1 scroll-thin">
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              aria-current={view === v.key ? "page" : undefined}
+              onClick={() => {
+                const sp = new URLSearchParams(params.toString());
+                if (v.key === "board") sp.delete("view");
+                else sp.set("view", v.key);
+                router.replace(`${pathname}${sp.size ? `?${sp}` : ""}`, { scroll: false });
+              }}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm text-muted-foreground transition-colors hover:text-foreground",
+                view === v.key && "bg-foreground text-background hover:text-background",
+              )}
+            >
+              <v.icon className="size-4" aria-hidden /> {v.label}
+            </button>
+          ))}
+        </div>
+      </nav>
       <div className="min-h-0 flex-1">
-        <Kanban data={data} canEdit={canEdit} visible={visible} filtering={filtering} highlight={highlight} onOpenCard={(id) => openCard(id)} />
+        {view === "board" && <Kanban data={data} canEdit={canEdit} visible={visible} filtering={filtering} highlight={highlight} onOpenCard={(id) => openCard(id)} />}
+        {view === "list" && <ListView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
+        {view === "calendar" && <CalendarView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
+        {view === "sprints" && <SprintsView data={data} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
+        {view === "insights" && <InsightsView boardId={data.board.id} onOpenCard={(id) => openCard(id)} />}
       </div>
-      {openCardId && <CardModal key={openCardId} cardId={openCardId} board={data} onClose={() => openCard(null)} />}
+      <BulkDialog data={data} open={panel === "bulk"} onOpenChange={(o) => setPanel(o ? "bulk" : null)} />
+      {panel === "duplicate" && <DuplicateBoardDialog data={data} onClose={() => setPanel(null)} />}
+      {openCardId && <CardModal key={openCardId} cardId={openCardId} board={data} onClose={() => openCard(null)} onOpenCard={(id) => openCard(id)} />}
       {panel === "settings" && <BoardSettingsDialog data={data} onClose={() => setPanel(null)} />}
       {panel === "archived" && <ArchivedDialog data={data} canEdit={canEdit} onOpenCard={openCard} onClose={() => setPanel(null)} />}
       {panel === "activity" && <ActivityDialog boardId={boardId} onOpenCard={openCard} onClose={() => setPanel(null)} />}

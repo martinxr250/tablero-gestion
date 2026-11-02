@@ -1,5 +1,5 @@
 // Espejo tipado de db/migrations (la fuente de verdad es el SQL).
-import { bigint, boolean, integer, jsonb, pgSchema, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const app = pgSchema("app");
 
@@ -59,6 +59,7 @@ export type OrgRole = "owner" | "admin" | "member" | "guest";
 export type WorkspaceRole = "admin" | "member" | "viewer";
 export type BoardRole = "admin" | "editor" | "commenter" | "viewer";
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
+export type QaStatus = "none" | "pending" | "approved" | "rejected";
 
 export const organizations = app.table("organizations", {
   id: uuid("id").primaryKey(),
@@ -113,6 +114,10 @@ export const boards = app.table("boards", {
   color: text("color").notNull(),
   visibility: text("visibility").$type<"private" | "workspace">().notNull(),
   workspaceAccess: text("workspace_access").$type<"viewer" | "commenter" | "editor">().notNull(),
+  qaRequired: boolean("qa_required").notNull().default(false),
+  qaListId: uuid("qa_list_id"),
+  doneListId: uuid("done_list_id"),
+  isTemplate: boolean("is_template").notNull().default(false),
   createdBy: uuid("created_by"),
   createdAt: ts("created_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
@@ -126,6 +131,7 @@ export const boardMembers = app.table(
     boardId: uuid("board_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").$type<BoardRole>().notNull(),
+    canReview: boolean("can_review").notNull().default(false),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.boardId, t.userId] })],
@@ -157,6 +163,14 @@ export const cards = app.table("cards", {
   completedAt: ts("completed_at"),
   position: text("position").notNull(),
   archivedAt: ts("archived_at"),
+  parentId: uuid("parent_id"),
+  sprintId: uuid("sprint_id"),
+  estimatePoints: numeric("estimate_points", { precision: 5, scale: 1, mode: "number" }),
+  recurrence: text("recurrence").$type<"weekly" | "monthly" | null>(),
+  qaStatus: text("qa_status").$type<QaStatus>().notNull().default("none"),
+  qaBy: uuid("qa_by"),
+  qaAt: ts("qa_at"),
+  qaNote: text("qa_note"),
   createdBy: uuid("created_by"),
   createdAt: ts("created_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
@@ -430,3 +444,30 @@ export const webhookDeliveries = app.table("webhook_deliveries", {
   event: text("event").notNull(),
   receivedAt: ts("received_at").notNull().defaultNow(),
 });
+
+// ───────────── Planificación ─────────────
+
+export const sprints = app.table("sprints", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  name: text("name").notNull(),
+  goal: text("goal"),
+  startsOn: date("starts_on", { mode: "string" }).notNull(),
+  endsOn: date("ends_on", { mode: "string" }).notNull(),
+  status: text("status").$type<"planned" | "active" | "closed">().notNull(),
+  capacityPoints: numeric("capacity_points", { precision: 6, scale: 1, mode: "number" }),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const cardWatchers = app.table(
+  "card_watchers",
+  {
+    orgId: uuid("org_id").notNull(),
+    cardId: uuid("card_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.userId] })],
+);

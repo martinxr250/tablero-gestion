@@ -1,12 +1,13 @@
 import "server-only";
-import { and, asc, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { route } from "../api/router";
 import { audit } from "../core/audit";
 import { badRequest, conflict, notFound } from "../core/errors";
 import { uuidv7 } from "../core/ids";
 import { withUser, type Tx } from "../db/client";
-import { activityLogs, boardMembers, boards, cards, labels, lists, organizationMembers, users, workspaces } from "../db/schema";
+import { activityLogs, boardMembers, boards, cards, labels, lists, organizationMembers, sprints, users, workspaces } from "../db/schema";
+import { applyTemplate, templateSchema } from "./templates";
 import { sendMail } from "../email/mailer";
 import { boardAccess, workspaceAccess } from "./access";
 import { emailSchema } from "./auth";
@@ -45,6 +46,14 @@ type CardSummaryRow = {
   attachment_count: number;
   checklist_total: number;
   checklist_done: number;
+  parent_id: string | null;
+  sprint_id: string | null;
+  estimate_points: string | null;
+  recurrence: "weekly" | "monthly" | null;
+  qa_status: "none" | "pending" | "approved" | "rejected";
+  subtask_total: number;
+  subtask_done: number;
+  blocked: boolean;
 };
 
 export async function boardCards(tx: Tx, boardId: string, archived = false) {
@@ -60,7 +69,15 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
       (select count(*)::int from app.attachments f where f.card_id = c.id) as attachment_count,
       (select count(*)::int from app.checklist_items i join app.checklists k on k.id = i.checklist_id where k.card_id = c.id) as checklist_total,
       (select count(*)::int from app.checklist_items i join app.checklists k on k.id = i.checklist_id
-         where k.card_id = c.id and i.done_at is not null) as checklist_done
+         where k.card_id = c.id and i.done_at is not null) as checklist_done,
+      c.parent_id, c.sprint_id, c.estimate_points, c.recurrence, c.qa_status,
+      (select count(*)::int from app.cards s where s.parent_id = c.id and s.archived_at is null) as subtask_total,
+      (select count(*)::int from app.cards s where s.parent_id = c.id and s.archived_at is null and s.completed_at is not null) as subtask_done,
+      -- Bloqueada: otra tarjeta sin terminar la bloquea.
+      exists (
+        select 1 from app.card_relations r join app.cards b on b.id = r.from_card_id
+        where r.to_card_id = c.id and r.type = 'blocks' and b.completed_at is null and b.archived_at is null
+      ) as blocked
     from app.cards c
     where c.board_id = ${boardId} and ${archived ? sql`c.archived_at is not null` : sql`c.archived_at is null`}
     order by c.position, c.id`);
@@ -84,14 +101,24 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
     attachmentCount: r.attachment_count,
     checklistTotal: r.checklist_total,
     checklistDone: r.checklist_done,
+    parentId: r.parent_id,
+    sprintId: r.sprint_id,
+    estimatePoints: r.estimate_points === null ? null : Number(r.estimate_points),
+    recurrence: r.recurrence,
+    qaStatus: r.qa_status,
+    subtaskTotal: r.subtask_total,
+    subtaskDone: r.subtask_done,
+    blocked: r.blocked,
   }));
 }
 
 export async function boardPeople(tx: Tx, boardId: string) {
-  return tx.execute<{ user_id: string; role: string; name: string; email: string; has_avatar: boolean }>(sql`
-    select r.user_id, r.role, u.name, u.email, (u.avatar_key is not null) as has_avatar
+  return tx.execute<{ user_id: string; role: string; name: string; email: string; has_avatar: boolean; can_review: boolean }>(sql`
+    select r.user_id, r.role, u.name, u.email, (u.avatar_key is not null) as has_avatar,
+      (r.role = 'admin' or coalesce(bm.can_review, false)) as can_review
     from app.board_roles(${boardId}) r
     join app.users u on u.id = r.user_id
+    left join app.board_members bm on bm.board_id = ${boardId} and bm.user_id = r.user_id
     order by u.name`);
 }
 
@@ -105,10 +132,10 @@ export const boardRoutes = [
   route({
     method: "POST",
     path: "/workspaces/:workspaceId/boards",
-    summary: "Crear un tablero (con listas iniciales)",
+    summary: "Crear un tablero (vacío con listas iniciales, desde una plantilla o copiando otro tablero)",
     tag: "Tableros",
     status: 201,
-    body: boardBody,
+    body: boardBody.extend({ template: templateSchema.optional() }),
     handler: async ({ me, params, body, audit: actx }) =>
       withUser(me.id, async (tx) => {
         const { workspace } = await workspaceAccess(tx, me.id, params.workspaceId, "create_board");
@@ -125,13 +152,7 @@ export const boardRoutes = [
           createdBy: me.id,
         });
         await tx.insert(boardMembers).values({ orgId: workspace.orgId, boardId: id, userId: me.id, role: "admin" });
-        let prev: string | null = null;
-        for (const name of ["Por hacer", "En curso", "Hecho"]) {
-          const { generateKeyBetween } = await import("fractional-indexing");
-          const position = generateKeyBetween(prev, null);
-          prev = position;
-          await tx.insert(lists).values({ id: uuidv7(), orgId: workspace.orgId, boardId: id, name, color: "slate", position });
-        }
+        await applyTemplate(tx, { orgId: workspace.orgId, boardId: id, actorId: me.id, template: body.template ?? { kind: "builtin", key: "kanban" } });
         await logActivity(tx, { orgId: workspace.orgId, boardId: id, actorId: me.id, action: "board.created", data: { name: body.name } });
         await audit(tx, actx, "board.created", { orgId: workspace.orgId, targetType: "board", targetId: id });
         return { id };
@@ -154,14 +175,16 @@ export const boardRoutes = [
             data: { action: "view" },
           });
         }
-        const [listRows, cardRows, labelRows, people, [cursor], [ws]] = await Promise.all([
+        const [listRows, cardRows, labelRows, people, [cursor], [ws], sprintRows] = await Promise.all([
           tx.select().from(lists).where(and(eq(lists.boardId, board.id), isNull(lists.archivedAt))).orderBy(asc(lists.position), asc(lists.id)),
           boardCards(tx, board.id),
           tx.select().from(labels).where(eq(labels.boardId, board.id)).orderBy(asc(labels.name)),
           boardPeople(tx, board.id),
           tx.select({ max: sql<number | null>`max(${activityLogs.id})` }).from(activityLogs).where(eq(activityLogs.boardId, board.id)),
           tx.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, board.workspaceId)),
+          tx.select().from(sprints).where(eq(sprints.boardId, board.id)).orderBy(asc(sprints.startsOn)),
         ]);
+        const meRow = people.find((p) => p.user_id === me.id);
         return {
           board: {
             id: board.id,
@@ -174,12 +197,26 @@ export const boardRoutes = [
             visibility: board.visibility,
             workspaceAccess: board.workspaceAccess,
             archivedAt: board.archivedAt,
+            qaRequired: board.qaRequired,
+            qaListId: board.qaListId,
+            doneListId: board.doneListId,
+            isTemplate: board.isTemplate,
           },
           role,
+          canReview: role === "admin" || !!meRow?.can_review,
+          sprints: sprintRows.map((sp) => ({
+            id: sp.id,
+            name: sp.name,
+            goal: sp.goal,
+            startsOn: sp.startsOn,
+            endsOn: sp.endsOn,
+            status: sp.status,
+            capacityPoints: sp.capacityPoints,
+          })),
           lists: listRows.map((l) => ({ id: l.id, name: l.name, color: l.color, position: l.position })),
           cards: cardRows,
           labels: labelRows.map((l) => ({ id: l.id, name: l.name, color: l.color })),
-          people: people.map((p) => ({ userId: p.user_id, name: p.name, email: p.email, hasAvatar: p.has_avatar, role: p.role })),
+          people: people.map((p) => ({ userId: p.user_id, name: p.name, email: p.email, hasAvatar: p.has_avatar, role: p.role, canReview: p.can_review })),
           cursor: Number(cursor?.max ?? 0),
         };
       }),
@@ -190,10 +227,23 @@ export const boardRoutes = [
     path: "/boards/:boardId",
     summary: "Editar nombre, color o visibilidad del tablero",
     tag: "Tableros",
-    body: boardBody.partial(),
+    body: boardBody.partial().extend({
+      qaRequired: z.boolean().optional(),
+      qaListId: z.uuid().nullable().optional(),
+      doneListId: z.uuid().nullable().optional(),
+      isTemplate: z.boolean().optional(),
+    }),
     handler: async ({ me, params, body, audit: actx }) =>
       withUser(me.id, async (tx) => {
         const { board } = await boardAccess(tx, actx, params.boardId, "manage");
+        const listIds = [body.qaListId, body.doneListId].filter(Boolean) as string[];
+        if (listIds.length) {
+          const found = await tx.select({ id: lists.id }).from(lists).where(and(eq(lists.boardId, board.id), inArray(lists.id, listIds)));
+          if (found.length !== new Set(listIds).size) throw badRequest("Lista inválida para este tablero");
+        }
+        const qaRequired = body.qaRequired ?? board.qaRequired;
+        if (qaRequired && !(body.qaListId !== undefined ? body.qaListId : board.qaListId)) throw badRequest("Elegí la lista de revisión para el control de calidad");
+        if (qaRequired && !(body.doneListId !== undefined ? body.doneListId : board.doneListId)) throw badRequest("Elegí la lista de terminado para el control de calidad");
         await tx.update(boards).set(body).where(eq(boards.id, board.id));
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, actorId: me.id, action: "board.updated", data: { fields: Object.keys(body) } });
         if (body.visibility || body.workspaceAccess) {
@@ -262,7 +312,7 @@ export const boardRoutes = [
     path: "/boards/:boardId/members/:userId",
     summary: "Agregar a un miembro de la organización al tablero o cambiar su rol",
     tag: "Tableros",
-    body: z.object({ role: z.enum(["admin", "editor", "commenter", "viewer"]) }),
+    body: z.object({ role: z.enum(["admin", "editor", "commenter", "viewer"]), canReview: z.boolean().optional() }),
     handler: async ({ me, params, body, audit: actx }) =>
       withUser(me.id, async (tx) => {
         const { board } = await boardAccess(tx, actx, params.boardId, "manage");
@@ -278,8 +328,11 @@ export const boardRoutes = [
         if (existing?.role === "admin" && body.role !== "admin") await assertAnotherBoardAdmin(tx, board.id, params.userId);
         await tx
           .insert(boardMembers)
-          .values({ orgId: board.orgId, boardId: board.id, userId: params.userId, role: body.role })
-          .onConflictDoUpdate({ target: [boardMembers.boardId, boardMembers.userId], set: { role: body.role } });
+          .values({ orgId: board.orgId, boardId: board.id, userId: params.userId, role: body.role, canReview: body.canReview ?? false })
+          .onConflictDoUpdate({
+            target: [boardMembers.boardId, boardMembers.userId],
+            set: { role: body.role, ...(body.canReview !== undefined ? { canReview: body.canReview } : {}) },
+          });
         if (!existing) {
           await notify(tx, {
             orgId: board.orgId,

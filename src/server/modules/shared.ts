@@ -5,6 +5,7 @@ import type { Tx } from "../db/client";
 import { activityLogs, notifications } from "../db/schema";
 
 export const COLORS = ["slate", "red", "orange", "amber", "green", "teal", "sky", "indigo", "violet", "pink"] as const;
+export type ColorName = (typeof COLORS)[number];
 export const colorSchema = z.enum(COLORS);
 export const uuidSchema = z.uuid();
 
@@ -29,6 +30,11 @@ export type NotificationType =
   | "comment.mention"
   | "comment.created"
   | "card.due_soon"
+  | "card.moved"
+  | "card.completed"
+  | "qa.requested"
+  | "qa.approved"
+  | "qa.rejected"
   | "board.added";
 
 /** Crea notificaciones internas (nunca para el propio actor). Sin RETURNING: RLS solo deja leer las propias. */

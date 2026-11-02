@@ -7,7 +7,7 @@ import { compiledRoutes } from "@/server/api";
 const BASE = "http://localhost:3000";
 let ipCounter = 1;
 
-export type Res<T = any> = { status: number; body: T; headers: Headers };
+export type Res<T = any> = { status: number; body: T; headers: Headers; text: string };
 
 /** Cliente HTTP que invoca el mismo dispatcher de la API, con su propio "navegador" (cookies, IP). */
 export class Client {
@@ -46,8 +46,9 @@ export class Client {
       if (/Max-Age=0/.test(c) || v === "") this.cookies.delete(k);
       else this.cookies.set(k, v);
     }
-    const text = res.headers.get("content-type")?.includes("json") ? await res.text() : "";
-    return { status: res.status, body: text ? JSON.parse(text) : undefined, headers: res.headers } as Res<T>;
+    const text = await res.text();
+    const isJson = res.headers.get("content-type")?.includes("json") && text;
+    return { status: res.status, body: isJson ? JSON.parse(text) : undefined, headers: res.headers, text } as Res<T>;
   }
   get = <T = any>(p: string) => this.req<T>("GET", p);
   post = <T = any>(p: string, b?: unknown) => this.req<T>("POST", p, b ?? {});

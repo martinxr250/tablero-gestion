@@ -12,6 +12,7 @@ import {
   cardAssignees,
   cardLabels,
   cardRelations,
+  cardWatchers,
   cards,
   checklistItems,
   checklists,
@@ -24,11 +25,12 @@ import {
 } from "../db/schema";
 import { storage } from "../storage/storage";
 import { boardAccess, boardUserRoles, canBoard, cardAccess } from "./access";
-import { downloadResponse, IMAGE_TYPES, MAX_ATTACHMENT_BYTES, validateUpload } from "./files";
+import { downloadResponse, IMAGE_TYPES, MAX_ATTACHMENT_BYTES, PREVIEW_TYPES, validateUpload } from "./files";
 import { positionAfter } from "./positions";
 import { richTextInput, sanitizeRichText } from "./richtext";
 import { logActivity, notify } from "./shared";
 import { schedulePush } from "../integrations/sync";
+import { assertCanComplete, assertSprintInBoard, assertValidParent, notifyWatchers, qaOnMove, spawnRecurrence } from "./planning";
 
 const title = z.string().trim().min(1, "Ingresá un título").max(200);
 const priority = z.enum(["none", "low", "medium", "high", "urgent"]);
@@ -44,7 +46,7 @@ async function assertBoardUsers(tx: Tx, boardId: string, userIds: string[]) {
   if (userIds.some((id) => !roles.has(id))) throw badRequest("Solo podés asignar a personas con acceso al tablero");
 }
 
-async function cardDetail(tx: Tx, cardId: string) {
+async function cardDetail(tx: Tx, cardId: string, viewerId?: string) {
   const [card] = await tx.select().from(cards).where(eq(cards.id, cardId));
   if (!card) throw notFound("Tarjeta");
   const [list] = await tx.select({ id: lists.id, name: lists.name }).from(lists).where(eq(lists.id, card.listId));
@@ -84,6 +86,16 @@ async function cardDetail(tx: Tx, cardId: string) {
       where r.to_card_id = ${card.id}`),
     card.createdBy ? tx.select({ name: users.name }).from(users).where(eq(users.id, card.createdBy)) : Promise.resolve([]),
   ]);
+  const [subtasks, parent, watchers, qaReviewer] = await Promise.all([
+    tx
+      .select({ id: cards.id, title: cards.title, completedAt: cards.completedAt, ownerId: cards.ownerId, listId: cards.listId })
+      .from(cards)
+      .where(and(eq(cards.parentId, card.id), isNull(cards.archivedAt)))
+      .orderBy(asc(cards.createdAt)),
+    card.parentId ? tx.select({ id: cards.id, title: cards.title }).from(cards).where(eq(cards.id, card.parentId)) : Promise.resolve([]),
+    tx.select({ userId: cardWatchers.userId }).from(cardWatchers).where(eq(cardWatchers.cardId, card.id)),
+    card.qaBy ? tx.select({ name: users.name }).from(users).where(eq(users.id, card.qaBy)) : Promise.resolve([]),
+  ]);
   return {
     id: card.id,
     boardId: card.boardId,
@@ -108,7 +120,15 @@ async function cardDetail(tx: Tx, cardId: string) {
         .filter((r) => r.item.checklistId === c.id)
         .map((r) => ({ id: r.item.id, text: r.item.text, done: r.item.doneAt !== null })),
     })),
-    attachments: attachmentRows.map((a) => ({ ...a, isImage: IMAGE_TYPES.has(a.mime) })),
+    attachments: attachmentRows.map((a) => ({ ...a, isImage: IMAGE_TYPES.has(a.mime), canPreview: PREVIEW_TYPES.has(a.mime) })),
+    parent: parent[0] ?? null,
+    subtasks: subtasks.map((t) => ({ ...t, done: t.completedAt !== null })),
+    sprintId: card.sprintId,
+    estimatePoints: card.estimatePoints,
+    recurrence: card.recurrence,
+    qa: { status: card.qaStatus, by: qaReviewer[0]?.name ?? null, at: card.qaAt, note: card.qaNote },
+    watcherCount: watchers.length,
+    watching: viewerId ? watchers.some((w) => w.userId === viewerId) : false,
     relations: relationRows.map((r) => ({
       cardId: r.card_id,
       title: r.title,
@@ -157,7 +177,7 @@ export const cardRoutes = [
     handler: async ({ me, params }) =>
       withUser(me.id, async (tx) => {
         const { role } = await cardAccess(tx, { actorId: me.id }, params.cardId, "view");
-        return { card: await cardDetail(tx, params.cardId), role };
+        return { card: await cardDetail(tx, params.cardId, me.id), role };
       }),
   }),
 
@@ -173,6 +193,10 @@ export const cardRoutes = [
       ownerId: z.uuid().nullable().optional(),
       dueAt: dueAt.optional(),
       completed: z.boolean().optional(),
+      estimatePoints: z.number().min(0).max(1000).nullable().optional(),
+      sprintId: z.uuid().nullable().optional(),
+      parentId: z.uuid().nullable().optional(),
+      recurrence: z.enum(["weekly", "monthly"]).nullable().optional(),
       expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
     }),
     handler: async ({ me, params, body, audit: actx }) => {
@@ -207,17 +231,40 @@ export const cardRoutes = [
           changed.push("dueAt");
         }
         if (body.completed !== undefined && body.completed !== (card.completedAt !== null)) {
+          if (body.completed) assertCanComplete(board, card);
           patch.completedAt = body.completed ? new Date() : null;
           changed.push("completed");
         }
-        if (changed.length === 0) return { card: await cardDetail(tx, card.id) };
+        if (body.estimatePoints !== undefined && body.estimatePoints !== card.estimatePoints) {
+          patch.estimatePoints = body.estimatePoints;
+          changed.push("estimate");
+        }
+        if (body.sprintId !== undefined && body.sprintId !== card.sprintId) {
+          if (body.sprintId) await assertSprintInBoard(tx, board.id, body.sprintId);
+          patch.sprintId = body.sprintId;
+          changed.push("sprint");
+        }
+        if (body.parentId !== undefined && body.parentId !== card.parentId) {
+          if (body.parentId) await assertValidParent(tx, card, body.parentId);
+          patch.parentId = body.parentId;
+          changed.push("parent");
+        }
+        if (body.recurrence !== undefined && body.recurrence !== card.recurrence) {
+          patch.recurrence = body.recurrence;
+          changed.push("recurrence");
+        }
+        if (changed.length === 0) return { card: await cardDetail(tx, card.id, me.id) };
         await tx.update(cards).set(patch).where(eq(cards.id, card.id));
         const action = changed.length === 1 && changed[0] === "completed" ? (body.completed ? "card.completed" : "card.reopened") : "card.updated";
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action, data: { title: patch.title ?? card.title, fields: changed } });
         if (patch.ownerId) {
           await notify(tx, { orgId: board.orgId, userIds: [patch.ownerId], actorId: me.id, type: "card.owner", boardId: board.id, cardId: card.id, data: { cardTitle: patch.title ?? card.title, boardName: board.name } });
         }
-        return { card: await cardDetail(tx, card.id) };
+        if (body.completed === true && changed.includes("completed")) {
+          await notifyWatchers(tx, { card, board, actorId: me.id, type: "card.completed" });
+          await spawnRecurrence(tx, { ...card, ...patch } as typeof card, me.id);
+        }
+        return { card: await cardDetail(tx, card.id, me.id) };
       });
       await schedulePush(params.cardId);
       return result;
@@ -237,8 +284,10 @@ export const cardRoutes = [
         if (!target) throw badRequest("La lista de destino no pertenece a este tablero");
         if (body.afterCardId === card.id) throw badRequest("Posición inválida");
         const position = await positionAfter(tx, "cards", target.id, body.afterCardId, card.id);
-        await tx.update(cards).set({ listId: target.id, position }).where(eq(cards.id, card.id));
+        const qaPatch = target.id !== card.listId ? qaOnMove(board, card, target.id) : {};
+        await tx.update(cards).set({ listId: target.id, position, ...qaPatch }).where(eq(cards.id, card.id));
         if (target.id !== card.listId) {
+          await notifyWatchers(tx, { card, board, actorId: me.id, type: "card.moved", extra: { to: target.name } });
           const [from] = await tx.select({ name: lists.name }).from(lists).where(eq(lists.id, card.listId));
           await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action: "card.moved", data: { title: card.title, from: from?.name, to: target.name } });
         } else {
@@ -584,6 +633,7 @@ export const cardRoutes = [
         await notify(tx, { orgId: card.orgId, userIds: mentioned, actorId: me.id, type: "comment.mention", boardId: board.id, cardId: card.id, data });
         const followers = new Set<string>((await tx.select({ userId: cardAssignees.userId }).from(cardAssignees).where(eq(cardAssignees.cardId, card.id))).map((a) => a.userId));
         if (card.ownerId) followers.add(card.ownerId);
+        for (const w of await tx.select({ userId: cardWatchers.userId }).from(cardWatchers).where(eq(cardWatchers.cardId, card.id))) followers.add(w.userId);
         mentioned.forEach((m) => followers.delete(m));
         await notify(tx, { orgId: card.orgId, userIds: followers, actorId: me.id, type: "comment.created", boardId: board.id, cardId: card.id, data });
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action: "comment.created", data: { title: card.title } });
@@ -673,7 +723,7 @@ export const cardRoutes = [
         return a;
       });
       const bytes = await storage().get(att.storageKey);
-      return downloadResponse(bytes, att.mime, att.fileName, query.inline === "1" && IMAGE_TYPES.has(att.mime));
+      return downloadResponse(bytes, att.mime, att.fileName, query.inline === "1" && PREVIEW_TYPES.has(att.mime));
     },
   }),
 

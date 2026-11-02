@@ -19,6 +19,7 @@ import { asColor, CHIP, PRIORITY, type ColorName } from "@/lib/colors";
 import { ago, dueState, fmtDateTime, toLocalInput } from "@/lib/format";
 import type { Activity, BoardData, BoardRole, CardDetail, Comment } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CardBanners, PlanningSidebar, QaPanel, Subtasks } from "./card-planning";
 import { DevPanel } from "./dev-panel";
 import { RichEditor } from "./rich-editor";
 
@@ -28,7 +29,7 @@ const RELATION_LABEL: Record<string, { out: string; in: string }> = {
   duplicates: { out: "Duplica a", in: "Duplicada por" },
 };
 
-export function CardModal({ cardId, board, onClose }: { cardId: string; board: BoardData; onClose: () => void }) {
+export function CardModal({ cardId, board, onClose, onOpenCard }: { cardId: string; board: BoardData; onClose: () => void; onOpenCard: (id: string) => void }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["card", cardId], queryFn: () => api<{ card: CardDetail; role: BoardRole }>(`/cards/${cardId}`) });
   const card = q.data?.card;
@@ -66,15 +67,18 @@ export function CardModal({ cardId, board, onClose }: { cardId: string; board: B
                 Esta tarjeta está archivada.
               </div>
             )}
+            <CardBanners card={card} onOpenCard={onOpenCard} />
             <MetaRow card={card} board={board} />
+            <QaPanel card={card} board={board} canEdit={canEdit} refresh={refresh} />
             <Description card={card} canEdit={canEdit} onSave={(description) => patch.mutateAsync({ description, expectedUpdatedAt: card.updatedAt })} />
+            <Subtasks card={card} board={board} canEdit={canEdit} refresh={refresh} onOpenCard={onOpenCard} />
             <Checklists card={card} canEdit={canEdit} refresh={refresh} />
             <Attachments card={card} canEdit={canEdit} refresh={refresh} />
             <Relations card={card} canEdit={canEdit} refresh={refresh} />
             <DevPanel cardId={card.id} boardId={board.board.id} canEdit={canEdit} />
             <Comments cardId={card.id} board={board} canComment={canComment} canModerate={q.data?.role === "admin"} />
           </div>
-          <Sidebar card={card} board={board} canEdit={canEdit} patch={(b) => patch.mutate(b)} refresh={refresh} onClose={onClose} />
+          <Sidebar card={card} board={board} canEdit={canEdit} patch={(b) => patch.mutate(b)} refresh={refresh} onClose={onClose} onOpenCard={onOpenCard} />
         </div>
       )}
     </Dialog>
@@ -347,6 +351,7 @@ function formatSize(bytes: number) {
 function Attachments({ card, canEdit, refresh }: { card: CardDetail; canEdit: boolean; refresh: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [preview, setPreview] = useState<CardDetail["attachments"][number] | null>(null);
   const upload = useMutation({
     mutationFn: (file: File) => {
       const form = new FormData();
@@ -371,15 +376,29 @@ function Attachments({ card, canEdit, refresh }: { card: CardDetail; canEdit: bo
           {card.attachments.map((a) => (
             <li key={a.id} className="flex items-center gap-3 rounded-xl border border-border p-2">
               {a.isImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/api/v1/attachments/${a.id}/download?inline=1`} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                <button onClick={() => setPreview(a)} aria-label={`Ver ${a.fileName}`} className="shrink-0 rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/v1/attachments/${a.id}/download?inline=1`} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                </button>
               ) : (
-                <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-[10px] font-bold uppercase text-muted-foreground">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] font-bold uppercase text-muted-foreground">
                   {a.fileName.split(".").pop()?.slice(0, 4)}
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{a.fileName}</p>
+                {a.canPreview ? (
+                  a.isImage ? (
+                    <button className="block max-w-full truncate text-left text-sm font-medium hover:text-primary" onClick={() => setPreview(a)}>
+                      {a.fileName}
+                    </button>
+                  ) : (
+                    <a className="block truncate text-sm font-medium hover:text-primary" href={`/api/v1/attachments/${a.id}/download?inline=1`} target="_blank" rel="noopener noreferrer">
+                      {a.fileName}
+                    </a>
+                  )
+                ) : (
+                  <p className="truncate text-sm font-medium">{a.fileName}</p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   {formatSize(a.sizeBytes)} · {a.uploaderName ?? "—"} · {ago(a.createdAt)}
                 </p>
@@ -395,6 +414,15 @@ function Attachments({ card, canEdit, refresh }: { card: CardDetail; canEdit: bo
             </li>
           ))}
         </ul>
+      )}
+      {preview && (
+        <Dialog open onOpenChange={(o) => !o && setPreview(null)} title={preview.fileName} wide>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/v1/attachments/${preview.id}/download?inline=1`} alt={preview.fileName} className="mx-auto max-h-[70vh] rounded-2xl object-contain" />
+          <a href={`/api/v1/attachments/${preview.id}/download`} className="inline-flex items-center gap-1.5 justify-self-end text-sm text-muted-foreground hover:text-primary">
+            <Download className="h-4 w-4" /> Descargar
+          </a>
+        </Dialog>
       )}
       {canEdit && (
         <div
@@ -687,6 +715,7 @@ function Sidebar({
   patch,
   refresh,
   onClose,
+  onOpenCard,
 }: {
   card: CardDetail;
   board: BoardData;
@@ -694,6 +723,7 @@ function Sidebar({
   patch: (b: Record<string, unknown>) => void;
   refresh: () => void;
   onClose: () => void;
+  onOpenCard: (id: string) => void;
 }) {
   const qc = useQueryClient();
   const assign = useMutation({ mutationFn: (userIds: string[]) => api(`/cards/${card.id}/assignees`, { method: "PUT", body: { userIds } }), onSettled: refresh });
@@ -789,6 +819,8 @@ function Sidebar({
           ))}
         </Select>
       </div>
+
+      <PlanningSidebar card={card} board={board} canEdit={canEdit} patch={patch} onOpenCard={onOpenCard} />
 
       {canEdit && !card.archivedAt && (
         <div className="space-y-1.5">

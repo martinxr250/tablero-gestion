@@ -15,12 +15,13 @@ import { Badge, Button, Field, Input, Select, Textarea } from "@/components/ui/p
 import { api } from "@/lib/api";
 import { asColor, CHIP, type ColorName } from "@/lib/colors";
 import type { BoardData } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { RepoSettings } from "./repo-settings";
 
 export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClose: () => void }) {
   const [tab, setTab] = useState("general");
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Configuración del tablero" wide>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Configuración del tablero" wide className="h-[min(46rem,90vh)] content-start [scrollbar-gutter:stable]">
       <Tabs
         value={tab}
         onValueChange={setTab}
@@ -52,14 +53,16 @@ function General({ data, onClose }: { data: BoardData; onClose: () => void }) {
   const qc = useQueryClient();
   const router = useRouter();
   const b = data.board;
-  const [form, setForm] = useState({ name: b.name, description: b.description ?? "", color: asColor(b.color) as ColorName, visibility: b.visibility, workspaceAccess: b.workspaceAccess });
+  const [form, setForm] = useState({ name: b.name, description: b.description ?? "", color: asColor(b.color) as ColorName, visibility: b.visibility, workspaceAccess: b.workspaceAccess,
+    qaRequired: b.qaRequired, qaListId: b.qaListId ?? "", doneListId: b.doneListId ?? "", isTemplate: b.isTemplate,
+  });
   const [confirmName, setConfirmName] = useState("");
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["board", b.id] });
     qc.invalidateQueries({ queryKey: ["workspaces"] });
   };
   const save = useMutation({
-    mutationFn: () => api(`/boards/${b.id}`, { method: "PATCH", body: { ...form, description: form.description || null } }),
+    mutationFn: () => api(`/boards/${b.id}`, { method: "PATCH", body: { ...form, description: form.description || null, qaListId: form.qaListId || null, doneListId: form.doneListId || null } }),
     onSuccess: () => toast.success("Tablero actualizado"),
     onSettled: refresh,
   });
@@ -103,7 +106,51 @@ function General({ data, onClose }: { data: BoardData; onClose: () => void }) {
           </Field>
         )}
       </div>
-      <Button onClick={() => save.mutate()} loading={save.isPending} disabled={!form.name.trim()}>
+      <div className="space-y-4 rounded-2xl border p-4">
+        <label className="flex items-start gap-3">
+          <input type="checkbox" className="mt-1 size-4 accent-[var(--primary)]" checked={form.qaRequired} onChange={(e) => setForm({ ...form, qaRequired: e.target.checked })} />
+          <span>
+            <span className="block text-sm font-medium">Control de calidad antes de terminar</span>
+            <span className="block text-xs text-muted-foreground">Una tarea solo pasa a la lista final cuando alguien con permiso de aprobación la revisa.</span>
+          </span>
+        </label>
+        {form.qaRequired && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Lista de revisión" htmlFor="b-qa-list">
+              <Select id="b-qa-list" value={form.qaListId} onChange={(e) => setForm({ ...form, qaListId: e.target.value })}>
+                <option value="">Elegí una lista…</option>
+                {data.lists.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Lista de terminadas" htmlFor="b-done-list">
+              <Select id="b-done-list" value={form.doneListId} onChange={(e) => setForm({ ...form, doneListId: e.target.value })}>
+                <option value="">Elegí una lista…</option>
+                {data.lists.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        )}
+        <label className="flex items-start gap-3 border-t pt-4">
+          <input type="checkbox" className="mt-1 size-4 accent-[var(--primary)]" checked={form.isTemplate} onChange={(e) => setForm({ ...form, isTemplate: e.target.checked })} />
+          <span>
+            <span className="block text-sm font-medium">Usar como plantilla</span>
+            <span className="block text-xs text-muted-foreground">Aparece como opción al crear un tablero nuevo en este espacio.</span>
+          </span>
+        </label>
+      </div>
+      <Button
+        onClick={() => save.mutate()}
+        loading={save.isPending}
+        disabled={!form.name.trim() || (form.qaRequired && (!form.qaListId || !form.doneListId || form.qaListId === form.doneListId))}
+      >
         Guardar cambios
       </Button>
       <div className="space-y-3 rounded-2xl border border-destructive/40 p-4">
@@ -136,7 +183,8 @@ function Members({ data }: { data: BoardData }) {
     qc.invalidateQueries({ queryKey: ["board-members", boardId] });
     qc.invalidateQueries({ queryKey: ["board", boardId] });
   };
-  const set = useMutation({ mutationFn: (v: { userId: string; role: string }) => api(`/boards/${boardId}/members/${v.userId}`, { method: "PUT", body: { role: v.role } }), onSettled: refresh });
+  const set = useMutation({ mutationFn: (v: { userId: string; role: string; canReview?: boolean }) =>
+      api(`/boards/${boardId}/members/${v.userId}`, { method: "PUT", body: { role: v.role, canReview: v.canReview } }), onSettled: refresh });
   const remove = useMutation({ mutationFn: (userId: string) => api(`/boards/${boardId}/members/${userId}`, { method: "DELETE" }), onSettled: refresh });
   const inBoard = new Set(members.data?.members.map((m) => m.userId));
   const candidates = orgMembers.data?.members.filter((m) => !inBoard.has(m.userId)) ?? [];
@@ -179,6 +227,34 @@ function Members({ data }: { data: BoardData }) {
           onRoleChange={(userId, r) => set.mutate({ userId, role: r })}
           onRemove={(userId) => confirm("¿Quitar a esta persona del tablero?") && remove.mutate(userId)}
         />
+      )}
+      {data.board.qaRequired && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Pueden aprobar en control de calidad</p>
+          <p className="mb-2 text-xs text-muted-foreground">Quienes administran el tablero siempre pueden aprobar.</p>
+          <ul className="flex flex-wrap gap-2">
+            {data.people
+              .filter((p) => p.role === "editor" || p.role === "admin")
+              .map((p) => {
+                const explicit = members.data?.members.find((m) => m.userId === p.userId);
+                const admin = p.role === "admin";
+                return (
+                  <li key={p.userId}>
+                    <label className={cn("inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm hover:bg-muted", admin && "cursor-default opacity-70")}>
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-[var(--primary)]"
+                        checked={!!p.canReview}
+                        disabled={admin || set.isPending}
+                        onChange={(e) => set.mutate({ userId: p.userId, role: explicit?.role ?? p.role, canReview: e.target.checked })}
+                      />
+                      {p.name}
+                    </label>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
       )}
       {implicit.length > 0 && (
         <div>

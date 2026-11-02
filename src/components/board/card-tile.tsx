@@ -1,11 +1,19 @@
 "use client";
 
-import { Calendar, CheckCircle2, CheckSquare, CircleDot, Flag, MessageSquare, Paperclip, Tag } from "lucide-react";
+import { Ban, Calendar, CheckCircle2, CheckSquare, CircleDot, CornerDownRight, Flag, ListTree, MessageSquare, Paperclip, Repeat, ShieldCheck, Tag } from "lucide-react";
 import { Avatar } from "@/components/ui/user-avatar";
 import { PRIORITY } from "@/lib/colors";
 import { dueState, fmtDate } from "@/lib/format";
 import type { CardSummary, Label, Person } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const QA_LABEL = { none: "", pending: "En revisión", approved: "Aprobada", rejected: "Rechazada" } as const;
+const QA_CHIP = {
+  none: "",
+  pending: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200",
+  approved: "bg-success/15 text-success",
+  rejected: "bg-brand-soft text-brand",
+} as const;
 
 /** Tarjeta del tablero: prioridad, responsable, fecha, extracto y pie con archivos y etiquetas. */
 export function CardTile({
@@ -46,6 +54,30 @@ export function CardTile({
             <CheckCircle2 className="size-3" aria-hidden /> Hecha
           </span>
         )}
+        {(card.blocked || card.qaStatus !== "none" || card.recurrence) && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {card.blocked && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-destructive uppercase">
+                <Ban className="size-3" aria-hidden /> Bloqueada
+              </span>
+            )}
+            {card.qaStatus !== "none" && (
+              <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase", QA_CHIP[card.qaStatus])}>
+                <ShieldCheck className="size-3" aria-hidden /> {QA_LABEL[card.qaStatus]}
+              </span>
+            )}
+            {card.recurrence && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground" title="Tarea que se repite">
+                <Repeat className="size-3" aria-hidden /> {card.recurrence === "weekly" ? "Semanal" : "Mensual"}
+              </span>
+            )}
+          </div>
+        )}
+        {card.parentId && (
+          <p className="mb-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <CornerDownRight className="size-3" aria-hidden /> Subtarea
+          </p>
+        )}
         <p className="text-[0.9rem] font-semibold leading-snug break-words">{card.title}</p>
 
         {(owner || card.dueAt) && (
@@ -79,6 +111,16 @@ export function CardTile({
         <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap" title="Archivos">
           <Paperclip className="size-3.5" aria-hidden /> {card.attachmentCount} {card.attachmentCount === 1 ? "archivo" : "archivos"}
         </span>
+        {card.estimatePoints !== null && (
+          <span className="inline-flex shrink-0 items-center rounded-full bg-primary-soft px-1.5 font-semibold text-primary tabular-nums" title="Estimación en puntos">
+            {card.estimatePoints} pts
+          </span>
+        )}
+        {card.subtaskTotal > 0 && (
+          <span className={cn("inline-flex shrink-0 items-center gap-1", card.subtaskDone === card.subtaskTotal && "text-success")} title="Subtareas">
+            <ListTree className="size-3.5" aria-hidden /> {card.subtaskDone}/{card.subtaskTotal}
+          </span>
+        )}
         {card.checklistTotal > 0 && (
           <span className={cn("inline-flex shrink-0 items-center gap-1", card.checklistDone === card.checklistTotal && "text-success")} title="Checklist">
             <CheckSquare className="size-3.5" aria-hidden /> {card.checklistDone}/{card.checklistTotal}

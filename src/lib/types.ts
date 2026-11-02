@@ -13,7 +13,7 @@ export type WorkspaceTree = {
   workspaces: { id: string; name: string; description: string | null; color: string; role: WorkspaceRole | null; boards: BoardLink[] }[];
 };
 
-export type Person = { userId: string; name: string; email: string; hasAvatar: boolean; role: string };
+export type Person = { userId: string; name: string; email: string; hasAvatar: boolean; role: string; canReview?: boolean };
 export type Label = { id: string; name: string; color: string };
 export type List = { id: string; name: string; color: string; position: string };
 
@@ -37,6 +37,26 @@ export type CardSummary = {
   attachmentCount: number;
   checklistTotal: number;
   checklistDone: number;
+  parentId: string | null;
+  sprintId: string | null;
+  estimatePoints: number | null;
+  recurrence: "weekly" | "monthly" | null;
+  qaStatus: QaStatus;
+  subtaskTotal: number;
+  subtaskDone: number;
+  blocked: boolean;
+};
+
+export type QaStatus = "none" | "pending" | "approved" | "rejected";
+
+export type Sprint = {
+  id: string;
+  name: string;
+  goal: string | null;
+  startsOn: string;
+  endsOn: string;
+  status: "planned" | "active" | "closed";
+  capacityPoints: number | null;
 };
 
 export type BoardData = {
@@ -51,8 +71,14 @@ export type BoardData = {
     visibility: "private" | "workspace";
     workspaceAccess: "viewer" | "commenter" | "editor";
     archivedAt: string | null;
+    qaRequired: boolean;
+    qaListId: string | null;
+    doneListId: string | null;
+    isTemplate: boolean;
   };
   role: BoardRole;
+  canReview: boolean;
+  sprints: Sprint[];
   lists: List[];
   cards: CardSummary[];
   labels: Label[];
@@ -78,7 +104,15 @@ export type CardDetail = {
   assigneeIds: string[];
   labelIds: string[];
   checklists: { id: string; title: string; items: { id: string; text: string; done: boolean }[] }[];
-  attachments: { id: string; fileName: string; mime: string; sizeBytes: number; uploaderName: string | null; createdAt: string; isImage: boolean }[];
+  attachments: { id: string; fileName: string; mime: string; sizeBytes: number; uploaderName: string | null; createdAt: string; isImage: boolean; canPreview: boolean }[];
+  parent: { id: string; title: string } | null;
+  subtasks: { id: string; title: string; done: boolean; ownerId: string | null; listId: string }[];
+  sprintId: string | null;
+  estimatePoints: number | null;
+  recurrence: "weekly" | "monthly" | null;
+  qa: { status: QaStatus; by: string | null; at: string | null; note: string | null };
+  watcherCount: number;
+  watching: boolean;
   relations: { cardId: string; title: string; boardId: string; boardName: string; type: string; direction: "in" | "out"; completed: boolean }[];
 };
 
