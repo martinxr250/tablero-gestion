@@ -75,31 +75,46 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
         e.preventDefault();
         setPaletteOpen((o) => !o);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setMini(!readMini());
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   return (
-    <div className="flex h-dvh gap-3 overflow-hidden bg-background lg:p-3">
+    <div className="flex h-dvh gap-3 overflow-hidden bg-background md:p-3">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2">
         Saltar al contenido
       </a>
-      {navOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
+      {navOpen && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-[transform,width] lg:static lg:translate-x-0 lg:rounded-[1.75rem] lg:border",
+          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground shadow-card transition-[transform,width] md:static md:translate-x-0 md:rounded-[1.75rem] md:border",
           navOpen ? "translate-x-0" : "-translate-x-full",
-          mini && "lg:w-[4.75rem]",
+          mini && "md:w-[4.75rem]",
         )}
         aria-label="Navegación principal"
       >
         <Sidebar user={user} mini={mini} onClose={() => setNavOpen(false)} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:px-6 lg:px-2">
-          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú" onClick={() => setNavOpen(true)}>
+        <header className="flex h-16 shrink-0 items-center gap-3 px-4 sm:px-6 md:px-2">
+          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menú" onClick={() => setNavOpen(true)}>
             <MenuIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden shrink-0 rounded-full bg-card shadow-card md:inline-flex"
+            aria-label={mini ? "Expandir menú lateral" : "Minimizar menú lateral"}
+            aria-pressed={mini}
+            title={`${mini ? "Expandir" : "Minimizar"} menú (⌘B)`}
+            onClick={() => setMini(!mini)}
+          >
+            {mini ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
           <button
             onClick={() => setPaletteOpen(true)}
@@ -137,10 +152,10 @@ function NavLink({ href, icon: Icon, label, active, mini }: { href: string; icon
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active && "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/25 hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-        mini && "lg:justify-center lg:px-0",
+        mini && "md:justify-center md:px-0",
       )}
     >
-      <Icon className="size-[1.1rem] shrink-0" /> <span className={cn(mini && "lg:hidden")}>{label}</span>
+      <Icon className="size-[1.1rem] shrink-0" /> <span className={cn(mini && "md:hidden")}>{label}</span>
     </Link>
   );
 }
@@ -166,27 +181,16 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
 
   return (
     <div className="flex h-full flex-col">
-      <div className={cn("flex items-center justify-between gap-2 px-5 pt-5 pb-4", mini && "lg:flex-col lg:px-0")}>
+      <div className={cn("flex items-center justify-between gap-2 px-5 pt-5 pb-4", mini && "md:flex-col md:px-0")}>
         <Link href="/dashboard" className="flex items-center gap-2.5" aria-label="Tableros, inicio">
           <Logo className="size-9 shrink-0" />
-          <span className={cn("leading-tight", mini && "lg:hidden")}>
+          <span className={cn("leading-tight", mini && "md:hidden")}>
             <span className="block text-lg font-bold tracking-tight text-foreground">Tableros</span>
             <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Gestión de proyectos</span>
           </span>
         </Link>
-        <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Cerrar menú" onClick={onClose}>
+        <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Cerrar menú" onClick={onClose}>
           <X />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="hidden text-muted-foreground lg:inline-flex"
-          aria-label={mini ? "Expandir menú lateral" : "Minimizar menú lateral"}
-          aria-pressed={mini}
-          title={mini ? "Expandir menú" : "Minimizar menú"}
-          onClick={() => setMini(!mini)}
-        >
-          {mini ? <PanelLeftOpen /> : <PanelLeftClose />}
         </Button>
       </div>
 
@@ -199,10 +203,10 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         )}
       </nav>
 
-      <div className={cn("mx-5 my-4 border-t", mini && "lg:mx-4")} />
+      <div className={cn("mx-5 my-4 border-t", mini && "md:mx-4")} />
 
       {mini && (
-        <ul className="hidden min-h-0 flex-1 flex-col items-center gap-1.5 overflow-y-auto pb-4 scroll-thin lg:flex" aria-label="Tableros">
+        <ul className="hidden min-h-0 flex-1 flex-col items-center gap-1.5 overflow-y-auto pb-4 scroll-thin md:flex" aria-label="Tableros">
           {tree?.workspaces.flatMap((w) => w.boards).map((b) => (
             <li key={b.id}>
               <Link
@@ -222,7 +226,7 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         </ul>
       )}
 
-      <div className={cn("flex min-h-0 flex-1 flex-col", mini && "lg:hidden")}>
+      <div className={cn("flex min-h-0 flex-1 flex-col", mini && "md:hidden")}>
         <div className="flex items-center justify-between px-6 pb-2">
           <Link href={orgId ? `/o/${orgId}` : "/dashboard"} className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
             Espacios de trabajo
@@ -279,22 +283,22 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         </div>
       </div>
 
-      <div className={cn("m-3 overflow-hidden rounded-2xl border bg-card", mini && "lg:mx-2")}>
+      <div className={cn("m-3 overflow-hidden rounded-2xl border bg-card", mini && "md:mx-2")}>
         <Menu>
           <MenuTrigger asChild>
             <button
-              className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted", mini && "lg:justify-center lg:px-0")}
+              className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted", mini && "md:justify-center md:px-0")}
               aria-label={`Organización: ${currentOrg?.name ?? "sin organización"}`}
               title={mini ? currentOrg?.name : undefined}
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary">
                 {(currentOrg?.name ?? "?").slice(0, 1).toUpperCase()}
               </span>
-              <span className={cn("min-w-0 flex-1", mini && "lg:hidden")}>
+              <span className={cn("min-w-0 flex-1", mini && "md:hidden")}>
                 <span className="block text-[11px] text-muted-foreground">Organización</span>
                 <span className="block truncate text-sm font-semibold text-foreground">{currentOrg?.name ?? "Sin organización"}</span>
               </span>
-              <ChevronsUpDown className={cn("size-4 text-muted-foreground", mini && "lg:hidden")} />
+              <ChevronsUpDown className={cn("size-4 text-muted-foreground", mini && "md:hidden")} />
             </button>
           </MenuTrigger>
           <MenuContent align="start" side="top" className="w-60">
@@ -320,14 +324,14 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         <div
           className={cn(
             "flex items-center justify-between border-t px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
-            mini && "lg:flex-col lg:gap-2 lg:px-0",
+            mini && "md:flex-col md:gap-2 md:px-0",
           )}
         >
           <button onClick={logout} className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Salir" title="Salir">
-            <LogOut className="size-3.5" /> <span className={cn(mini && "lg:hidden")}>Salir</span>
+            <LogOut className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Salir</span>
           </button>
           <Link href="/settings" className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label="Mi cuenta" title={user.email}>
-            <UserRound className="size-3.5" /> <span className={cn(mini && "lg:hidden")}>Mi cuenta</span>
+            <UserRound className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Mi cuenta</span>
           </Link>
         </div>
       </div>
