@@ -28,6 +28,7 @@ import { downloadResponse, IMAGE_TYPES, MAX_ATTACHMENT_BYTES, validateUpload } f
 import { positionAfter } from "./positions";
 import { richTextInput, sanitizeRichText } from "./richtext";
 import { logActivity, notify } from "./shared";
+import { schedulePush } from "../integrations/sync";
 
 const title = z.string().trim().min(1, "Ingresá un título").max(200);
 const priority = z.enum(["none", "low", "medium", "high", "urgent"]);
@@ -174,8 +175,8 @@ export const cardRoutes = [
       completed: z.boolean().optional(),
       expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
     }),
-    handler: async ({ me, params, body, audit: actx }) =>
-      withUser(me.id, async (tx) => {
+    handler: async ({ me, params, body, audit: actx }) => {
+      const result = await withUser(me.id, async (tx) => {
         const { card, board } = await cardAccess(tx, actx, params.cardId, "edit");
         if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== card.updatedAt.getTime()) {
           throw conflict("Otra persona modificó esta tarjeta. Recargá para ver los cambios.", "stale_update");
@@ -217,7 +218,10 @@ export const cardRoutes = [
           await notify(tx, { orgId: board.orgId, userIds: [patch.ownerId], actorId: me.id, type: "card.owner", boardId: board.id, cardId: card.id, data: { cardTitle: patch.title ?? card.title, boardName: board.name } });
         }
         return { card: await cardDetail(tx, card.id) };
-      }),
+      });
+      await schedulePush(params.cardId);
+      return result;
+    },
   }),
 
   route({
@@ -226,8 +230,8 @@ export const cardRoutes = [
     summary: "Mover una tarjeta a otra lista o posición",
     tag: "Tarjetas",
     body: z.object({ listId: z.uuid(), afterCardId: z.uuid().nullable() }),
-    handler: async ({ me, params, body, audit: actx }) =>
-      withUser(me.id, async (tx) => {
+    handler: async ({ me, params, body, audit: actx }) => {
+      const result = await withUser(me.id, async (tx) => {
         const { card, board } = await cardAccess(tx, actx, params.cardId, "edit");
         const [target] = await tx.select().from(lists).where(and(eq(lists.id, body.listId), eq(lists.boardId, board.id), isNull(lists.archivedAt)));
         if (!target) throw badRequest("La lista de destino no pertenece a este tablero");
@@ -241,7 +245,10 @@ export const cardRoutes = [
           await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action: "card.reordered", data: { title: card.title } });
         }
         return { position, listId: target.id };
-      }),
+      });
+      await schedulePush(params.cardId);
+      return result;
+    },
   }),
 
   route({
@@ -308,8 +315,8 @@ export const cardRoutes = [
     summary: "Definir las etiquetas de una tarjeta",
     tag: "Tarjetas",
     body: z.object({ labelIds: z.array(z.uuid()).max(20) }),
-    handler: async ({ me, params, body, audit: actx }) =>
-      withUser(me.id, async (tx) => {
+    handler: async ({ me, params, body, audit: actx }) => {
+      const result = await withUser(me.id, async (tx) => {
         const { card, board } = await cardAccess(tx, actx, params.cardId, "edit");
         const wanted = [...new Set(body.labelIds)];
         if (wanted.length) {
@@ -320,7 +327,10 @@ export const cardRoutes = [
         if (wanted.length) await tx.insert(cardLabels).values(wanted.map((labelId) => ({ orgId: board.orgId, boardId: board.id, cardId: card.id, labelId })));
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, cardId: card.id, actorId: me.id, action: "card.labels", data: { title: card.title } });
         return { labelIds: wanted };
-      }),
+      });
+      await schedulePush(params.cardId);
+      return result;
+    },
   }),
 
   route({

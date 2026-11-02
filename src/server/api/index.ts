@@ -8,6 +8,7 @@ import { boardRoutes } from "../modules/boards";
 import { cardRoutes } from "../modules/cards";
 import { insightRoutes } from "../modules/insights";
 import { cronRoutes } from "../modules/cron";
+import { integrationRoutes } from "../modules/integrations";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -18,6 +19,7 @@ const domainRoutes: RouteDef[] = [
   ...cardRoutes,
   ...insightRoutes,
   ...cronRoutes,
+  ...integrationRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

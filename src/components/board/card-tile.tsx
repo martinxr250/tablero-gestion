@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CheckCircle2, CheckSquare, Flag, MessageSquare, Paperclip, Tag } from "lucide-react";
+import { Calendar, CheckCircle2, CheckSquare, CircleDot, Flag, MessageSquare, Paperclip, Tag } from "lucide-react";
 import { Avatar } from "@/components/ui/user-avatar";
 import { PRIORITY } from "@/lib/colors";
 import { dueState, fmtDate } from "@/lib/format";
@@ -87,6 +87,11 @@ export function CardTile({
         {card.commentCount > 0 && (
           <span className="inline-flex shrink-0 items-center gap-1" title="Comentarios">
             <MessageSquare className="size-3.5" aria-hidden /> {card.commentCount}
+          </span>
+        )}
+        {card.issueNumber !== null && (
+          <span className={cn("inline-flex shrink-0 items-center gap-1 font-medium", card.syncAttention ? "text-amber-600 dark:text-amber-300" : "text-primary")} title={card.syncAttention ? "Sincronización pendiente o con conflicto" : `Issue #${card.issueNumber}`}>
+            <CircleDot className="size-3.5" aria-hidden />#{card.issueNumber}
           </span>
         )}
         {labelNames.length > 0 && (

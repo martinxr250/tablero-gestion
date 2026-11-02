@@ -37,6 +37,8 @@ type CardSummaryRow = {
   updated_at: Date;
   has_description: boolean;
   excerpt: string;
+  issue_number: number | null;
+  sync_attention: boolean | null;
   assignee_ids: string[];
   label_ids: string[];
   comment_count: number;
@@ -50,6 +52,8 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
     select c.id, c.list_id, c.title, c.priority, c.owner_id, c.due_at, c.completed_at, c.position, c.updated_at,
       (c.description_text <> '') as has_description,
       left(c.description_text, 160) as excerpt,
+      (select l.issue_number from app.card_issue_links l where l.card_id = c.id) as issue_number,
+      (select (l.conflict is not null or l.pending_push) from app.card_issue_links l where l.card_id = c.id) as sync_attention,
       coalesce((select array_agg(a.user_id) from app.card_assignees a where a.card_id = c.id), '{}') as assignee_ids,
       coalesce((select array_agg(l.label_id) from app.card_labels l where l.card_id = c.id), '{}') as label_ids,
       (select count(*)::int from app.comments m where m.card_id = c.id and m.deleted_at is null) as comment_count,
@@ -72,6 +76,8 @@ export async function boardCards(tx: Tx, boardId: string, archived = false) {
     updatedAt: r.updated_at,
     hasDescription: r.has_description,
     excerpt: r.excerpt,
+    issueNumber: r.issue_number,
+    syncAttention: !!r.sync_attention,
     assigneeIds: r.assignee_ids,
     labelIds: r.label_ids,
     commentCount: r.comment_count,

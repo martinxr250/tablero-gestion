@@ -4,6 +4,7 @@ import { route } from "../api/router";
 import { logger } from "../core/logger";
 import { withSystem } from "../db/client";
 import { storage } from "../storage/storage";
+import { syncRepo } from "../integrations/sync";
 
 /**
  * Tareas diarias (Vercel Cron, autenticadas con CRON_SECRET):
@@ -47,6 +48,19 @@ export async function runDailyJobs() {
     await tx.execute(sql`select set_config('app.audit_purge', 'on', true)`);
     report.auditLogs = (await tx.execute(sql`delete from app.audit_logs where created_at < now() - interval '365 days'`)).count;
   });
+
+  // Sincronización diaria de respaldo para repos sin webhook (por ejemplo, en desarrollo local).
+  const repos = await withSystem((tx) => tx.execute<{ id: string }>(sql`select id from app.board_repos`));
+  let synced = 0;
+  for (const r of repos) {
+    try {
+      await syncRepo(r.id);
+      synced++;
+    } catch (err) {
+      logger.warn("daily_repo_sync_failed", { boardRepoId: r.id, err });
+    }
+  }
+  report.reposSynced = synced;
 
   // Borrado físico de objetos de almacenamiento huérfanos.
   const keys = await withSystem((tx) => tx.execute<{ key: string }>(sql`select key from app.storage_gc order by created_at limit 500`));

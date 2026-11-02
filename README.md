@@ -64,7 +64,19 @@ Está construida como un producto completo: autenticación propia, permisos por 
 - Registro con verificación de correo, recuperación de contraseña, verificación en dos pasos (TOTP) con códigos de recuperación.
 - Gestión de sesiones abiertas, cambio de contraseña y eliminación de cuenta.
 
-## Casos de uso
+## Integración con GitHub
+
+Cada tablero puede vincularse a un repositorio (GitLab está en camino con el mismo diseño):
+
+- **Conexión segura** con un token *fine-grained* guardado cifrado; nunca llega al navegador.
+- **Importación** de los issues abiertos como tarjetas y creación de issues desde cualquier tarjeta.
+- **Sincronización bidireccional** de título, descripción (Markdown ↔ texto enriquecido), etiquetas, prioridad (como etiqueta `prioridad: …`), responsable y estado. Mover una tarjeta a la lista de terminado cierra el issue.
+- **Sin ecos ni pisadas:** cada vínculo guarda la huella local y remota del último estado; si ambos lados cambiaron, la tarjeta muestra el conflicto y una persona decide.
+- **Desarrollo en la tarjeta:** PRs que mencionan el issue (título, descripción o rama `12-…`), con estado, revisión y resultado de los checks.
+- **Cerrar un issue no completa la tarjeta:** se puede mover a una columna de revisión; la decisión final queda en el tablero.
+- **Webhooks** firmados (HMAC SHA-256) y deduplicados en producción; en local, sincronización por sondeo al abrir el tablero y cada 2 minutos.
+
+
 
 - **Equipo de marketing** que planifica una campaña: columnas *Por hacer / En curso / Revisión / Hecho*, piezas con fecha de entrega, checklist de entregables y archivos adjuntos.
 - **Grupo de amigos o estudio chico** que organiza un proyecto en común: cada uno ve sus tareas en el inicio y recibe aviso cuando lo mencionan o algo está por vencer.

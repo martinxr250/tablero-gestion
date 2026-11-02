@@ -13,7 +13,8 @@ import { rateLimit } from "../core/rate-limit";
 
 export type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 /** none: público · user: sesión + email verificado · user-unverified: sesión aunque no haya verificado. */
-export type AuthMode = "none" | "user" | "user-unverified" | "cron";
+/** webhook: sin sesión ni Origin; el handler valida la firma sobre el cuerpo crudo (rawBody). */
+export type AuthMode = "none" | "user" | "user-unverified" | "cron" | "webhook";
 
 export interface RouteContext<TBody, TQuery> {
   req: Request;
@@ -21,6 +22,7 @@ export interface RouteContext<TBody, TQuery> {
   body: TBody;
   query: TQuery;
   form: FormData | null;
+  rawBody: string | null;
   user: SessionUser | null;
   /** Usuario autenticado (lanza 401 si la ruta es pública y no hay sesión). */
   readonly me: SessionUser;
@@ -43,6 +45,7 @@ export interface RouteDef {
   body?: z.ZodType;
   query?: z.ZodType;
   multipart?: boolean;
+  rawBody?: boolean;
   status?: number;
   rateLimit?: RateRule[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +61,7 @@ export function route<TBody extends z.ZodType | undefined = undefined, TQuery ex
   body?: TBody;
   query?: TQuery;
   multipart?: boolean;
+  rawBody?: boolean;
   status?: number;
   rateLimit?: RateRule[];
   handler: (
@@ -200,7 +204,7 @@ export async function dispatch(req: Request, compiled: Compiled[], basePath = "/
       const header = req.headers.get("authorization") ?? "";
       const { safeEqual } = await import("../core/crypto");
       if (!secret || !safeEqual(header, `Bearer ${secret}`)) throw unauthorized();
-    } else if (method !== "GET") {
+    } else if (method !== "GET" && def.auth !== "webhook") {
       checkOrigin(req);
     }
 
@@ -224,7 +228,11 @@ export async function dispatch(req: Request, compiled: Compiled[], basePath = "/
 
     let body: unknown;
     let form: FormData | null = null;
-    if (def.multipart) {
+    let rawBody: string | null = null;
+    if (def.rawBody) {
+      rawBody = await req.text();
+      if (Buffer.byteLength(rawBody) > 1024 * 1024) throw new AppError(413, "payload_too_large", "El cuerpo es demasiado grande");
+    } else if (def.multipart) {
       const len = Number(req.headers.get("content-length") ?? "0");
       if (!len || len > MAX_MULTIPART_BYTES) throw new AppError(413, "payload_too_large", "El archivo supera el máximo de 4 MB");
       form = await req.formData();
@@ -241,6 +249,7 @@ export async function dispatch(req: Request, compiled: Compiled[], basePath = "/
       body,
       query,
       form,
+      rawBody,
       user,
       get me() {
         if (!user) throw unauthorized("unauthenticated", "Iniciá sesión para continuar");
@@ -292,7 +301,7 @@ export function buildOpenApi(routes: RouteDef[]) {
       summary: r.summary,
       tags: [r.tag],
       parameters,
-      security: r.auth === "none" ? [] : r.auth === "cron" ? [{ cronSecret: [] }] : [{ cookieAuth: [] }],
+      security: r.auth === "none" || r.auth === "webhook" ? [] : r.auth === "cron" ? [{ cronSecret: [] }] : [{ cookieAuth: [] }],
       responses: {
         [String(r.status ?? 200)]: { description: "OK" },
         "4XX": { $ref: "#/components/responses/Error" },

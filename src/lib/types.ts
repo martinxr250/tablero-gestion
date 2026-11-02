@@ -29,6 +29,8 @@ export type CardSummary = {
   updatedAt: string;
   hasDescription: boolean;
   excerpt: string;
+  issueNumber: number | null;
+  syncAttention: boolean;
   assigneeIds: string[];
   labelIds: string[];
   commentCount: number;

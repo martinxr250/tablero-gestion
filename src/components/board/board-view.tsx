@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity as ActivityIcon, Archive, Filter, Lock, MoreHorizontal, Plus, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, Archive, Filter, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { BoardSettingsDialog } from "./board-settings";
 import { CardModal } from "./card-modal";
 import { Kanban } from "./kanban";
+import type { RepoInfo } from "./repo-settings";
 
 type Filters = { text: string; member: string; label: string; due: string; priority: string };
 const EMPTY: Filters = { text: "", member: "", label: "", due: "", priority: "" };
@@ -132,6 +133,7 @@ export function BoardView({ boardId }: { boardId: string }) {
             <span className="text-muted-foreground">/</span>
             <span className="truncate rounded-lg bg-card px-2.5 py-1.5 shadow-card">{data.board.name}</span>
           </nav>
+          <RepoChip boardId={boardId} canSync={data.role !== "viewer"} />
           <span className="flex-1" />
           <AvatarStack users={data.people} max={3} size={32} />
           <div className="w-44">
@@ -383,5 +385,43 @@ function ActivityDialog({ boardId, onOpenCard, onClose }: { boardId: string; onO
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Estado del repositorio vinculado. Sin webhook (por ejemplo en local), sincroniza al abrir y cada 2 minutos. */
+function RepoChip({ boardId, canSync }: { boardId: string; canSync: boolean }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["board-repo", boardId], queryFn: () => api<{ repo: RepoInfo | null }>(`/boards/${boardId}/repo`) });
+  const repo = q.data?.repo;
+  const runSync = async () => {
+    await api(`/boards/${boardId}/repo/sync`, { method: "POST", body: {} });
+    qc.invalidateQueries({ queryKey: ["board", boardId] });
+    qc.invalidateQueries({ queryKey: ["board-repo", boardId] });
+    return Date.now();
+  };
+  useQuery({
+    queryKey: ["board-repo-autosync", boardId],
+    queryFn: runSync,
+    enabled: !!repo && !repo.webhook && canSync,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const manual = useMutation({ mutationFn: runSync, onSuccess: () => toast.success("Sincronizado con GitHub") });
+  if (!repo) return null;
+  const attention = repo.pending > 0 || repo.conflicts > 0 || !!repo.lastSyncError;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-xs font-medium shadow-card">
+      <GitBranch className="size-3.5 text-primary" aria-hidden />
+      <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="max-w-40 truncate hover:text-primary">
+        {repo.fullName}
+      </a>
+      <span className={cn("size-1.5 rounded-full", attention ? "bg-amber-500" : "bg-success")} title={repo.lastSyncError ?? (attention ? "Hay cambios pendientes o conflictos" : "Sincronizado")} />
+      {canSync && (
+        <button className="rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label="Sincronizar con GitHub" title={repo.lastSyncedAt ? `Última sincronización ${ago(repo.lastSyncedAt)}` : "Sincronizar"} onClick={() => manual.mutate()}>
+          <RefreshCw className={cn("size-3.5", manual.isPending && "animate-spin")} />
+        </button>
+      )}
+    </span>
   );
 }
