@@ -4,4 +4,4 @@ useDefault = true
 
 [allowlist]
 description = "Datos de prueba"
-paths = ['''^tests/''']
+paths = ['''^(tests|e2e)/''']
