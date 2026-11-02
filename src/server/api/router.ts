@@ -236,7 +236,8 @@ export async function dispatch(req: Request, compiled: Compiled[], basePath = "/
       const len = Number(req.headers.get("content-length") ?? "0");
       if (!len || len > MAX_MULTIPART_BYTES) throw new AppError(413, "payload_too_large", "El archivo supera el máximo de 4 MB");
       form = await req.formData();
-    } else if (method !== "GET" && method !== "DELETE") {
+    } else if (method !== "GET") {
+      // DELETE también puede traer cuerpo (confirmar nombre o contraseña antes de borrar).
       body = await readJson(req);
     }
     if (def.body) body = def.body.parse(body ?? {});
