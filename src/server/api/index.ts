@@ -12,6 +12,7 @@ import { integrationRoutes } from "../modules/integrations";
 import { planningRoutes } from "../modules/planning";
 import { shareRoutes } from "../modules/share";
 import { fieldRoutes } from "../modules/fields";
+import { workRoutes } from "../modules/work";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -26,6 +27,7 @@ const domainRoutes: RouteDef[] = [
   ...planningRoutes,
   ...shareRoutes,
   ...fieldRoutes,
+  ...workRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

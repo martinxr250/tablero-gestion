@@ -510,3 +510,12 @@ export const cardFieldValues = app.table(
   },
   (t) => [primaryKey({ columns: [t.cardId, t.fieldId] })],
 );
+
+export const inboxItems = app.table("inbox_items", {
+  id: uuid("id").primaryKey(),
+  userId: uuid("user_id").notNull(),
+  title: text("title").notNull(),
+  dueOn: date("due_on"),
+  doneAt: ts("done_at"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
