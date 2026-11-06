@@ -5,8 +5,9 @@ import { CornerDownRight, FileSpreadsheet, Sparkles, Trash2, Upload } from "luci
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/overlay";
-import { Alert, Button, Select, Spinner, Textarea } from "@/components/ui/primitives";
+import { Alert, Button, Select, Textarea } from "@/components/ui/primitives";
 import { aiTasksToRows, useAiEnabled, type AiTask } from "@/lib/ai";
+import { AiError, AiMark, AiThinking } from "@/components/ai/ai-kit";
 import { api, ApiError } from "@/lib/api";
 import { parseCsv, parsePasted, parseRows, type Cell, type DraftRow } from "@/lib/bulk-parse";
 import type { BoardData } from "@/lib/types";
@@ -206,15 +207,24 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
             />
           </div>
           {aiEnabled && (
-            <section className="space-y-3 rounded-2xl border border-primary/30 bg-primary-soft/40 p-4" aria-label="Generar con IA">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Sparkles className="size-4 text-primary" /> Generar tareas con IA
-              </p>
-              <p className="text-xs text-muted-foreground">Claude lee un PDF, una imagen (por ejemplo, la foto de un pizarrón) o el texto de arriba y propone tareas. Nada se crea hasta que revises y confirmes.</p>
+            <section className="ai-surface space-y-3 rounded-2xl p-4" aria-label="Generar con IA">
+              <div className="flex items-start gap-3">
+                <AiMark />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">
+                    Generar tareas con <span className="ai-text">IA</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">Claude lee un PDF, una imagen (por ejemplo, la foto de un pizarrón) o el texto de arriba y propone tareas con responsables, fechas y subtareas. Nada se crea hasta que revises y confirmes.</p>
+                </div>
+              </div>
               {generate.isPending || uploadForAi.isPending ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                  <Spinner className="size-4" /> {uploadForAi.isPending ? "Subiendo el archivo…" : "Leyendo el material y armando las tareas…"}
-                </p>
+                <div className="rounded-xl bg-background/60 p-3.5">
+                  <AiThinking
+                    compact
+                    lines={3}
+                    steps={uploadForAi.isPending ? ["Subiendo el archivo…"] : ["Leyendo el material…", "Detectando tareas y responsables…", "Armando la lista para revisar…"]}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
                   {!!files.data?.files.some((f) => f.aiReadable) && (
@@ -227,7 +237,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
                           </option>
                         ))}
                       </Select>
-                      <Button size="sm" disabled={!aiPick} onClick={() => generate.mutate({ fileId: aiPick })}>
+                      <Button size="sm" className="ai-cta" disabled={!aiPick} onClick={() => generate.mutate({ fileId: aiPick })}>
                         <Sparkles /> Generar
                       </Button>
                     </>
@@ -251,7 +261,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
                   />
                 </div>
               )}
-              {generate.error && <Alert>{generate.error instanceof ApiError ? generate.error.message : "No se pudo generar con IA."}</Alert>}
+              {generate.error && !generate.isPending && <AiError error={generate.error} retry={generate.variables ? () => generate.mutate(generate.variables!) : undefined} />}
             </section>
           )}
           <div className="flex gap-3 rounded-2xl bg-muted p-4 text-xs text-muted-foreground">

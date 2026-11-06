@@ -268,7 +268,7 @@ export const aiRoutes = [
       const out = await generate(
         { orgId: snap.board.orgId, userId: me.id, boardId: snap.board.id, feature: "board_ask" },
         {
-          system: `Respondés preguntas sobre un tablero de proyecto usando solo los datos que te pasan (tarjetas y actividad de los últimos 14 días). Si los datos no alcanzan para responder, decilo. Sé breve y concreto; mencioná las tarjetas por su título. ${UNTRUSTED_NOTE}`,
+          system: `Respondés preguntas sobre un tablero de proyecto usando solo los datos que te pasan (tarjetas y actividad de los últimos 14 días). Si los datos no alcanzan para responder, decilo. Sé concreto y fácil de escanear. Formato (Markdown simple): empezá con una o dos oraciones que respondan directo; después, si hace falta detalle, usá subtítulos "### " cortos y viñetas "- " (una idea por viñeta), y **negrita** solo para lo clave (personas, fechas, estados). Nada de tablas ni bloques de código. Para citar una tarjeta escribí [[n]] con su número, en lugar de repetir el título. ${UNTRUSTED_NOTE}`,
           content: [
             {
               type: "text",
@@ -279,11 +279,16 @@ export const aiRoutes = [
           schema: AskSchema,
         },
       );
-      const cardsOut = [...new Set(out.cards)]
-        .filter((n) => Number.isInteger(n) && n >= 1 && n <= pool.length)
-        .slice(0, 12)
-        .map((n) => ({ id: pool[n - 1]!.id, title: pool[n - 1]!.title }));
-      return { answer: clip(out.answer, 3000), cards: cardsOut };
+      // Las citas [[n]] del texto se cambian por el id de la tarjeta; números inexistentes se quitan.
+      const valid = (n: number) => Number.isInteger(n) && n >= 1 && n <= pool.length;
+      const cited = [...out.answer.matchAll(/\[\[(\d{1,4})\]\]/g)].map((m) => Number(m[1]));
+      const cardsOut = [...new Set([...cited, ...out.cards])]
+        .filter(valid)
+        .slice(0, 20)
+        .map((n) => ({ n, id: pool[n - 1]!.id, title: pool[n - 1]!.title }));
+      const kept = new Map(cardsOut.map((c) => [c.n, c.id]));
+      const answer = out.answer.replace(/\[\[(\d{1,4})\]\]/g, (_, n: string) => (kept.has(Number(n)) ? `[[card:${kept.get(Number(n))}]]` : ""));
+      return { answer: clip(answer, 5000), cards: cardsOut.map(({ id, title }) => ({ id, title })) };
     },
   }),
 

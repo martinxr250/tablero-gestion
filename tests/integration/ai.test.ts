@@ -147,6 +147,12 @@ describe("archivos del tablero e IA", () => {
     const req = sent.at(-1)!.body;
     expect(req.messages[0].content.at(-1).text).toContain("¿Qué está vencido?");
     expect((await viewer.post(`/boards/${s.boardId}/ai/ask`, { question: "?" })).status).toBe(400);
+    // Las citas [[n]] del texto se convierten en referencias a la tarjeta; las inexistentes se quitan.
+    nextReply = { answer: "Mirá [[1]] y también [[999]].", cards: [] };
+    const cited = await viewer.post(`/boards/${s.boardId}/ai/ask`, { question: "¿Qué miro primero?" });
+    expect(cited.body.cards).toHaveLength(1);
+    expect(cited.body.answer).toBe(`Mirá [[card:${cited.body.cards[0].id}]] y también .`);
+    expect(sent.at(-1)!.body.system).toContain("[[n]]");
   });
 
   it("si la IA rechaza el pedido, responde un error claro", async () => {

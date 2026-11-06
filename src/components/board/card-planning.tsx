@@ -1,17 +1,19 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Ban, Bell, BellOff, CheckCircle2, Copy, Layers, ListChecks, XCircle, Sparkles, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
+import { AlertTriangle, Ban, Bell, BellOff, CheckCircle2, Copy, Layers, ListChecks, XCircle, Sparkles, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X, FileText, Paperclip, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Dialog, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
 import { Avatar } from "@/components/ui/user-avatar";
-import { Button, Input, Select, Textarea , Spinner } from "@/components/ui/primitives";
+import { AiBlock, AiError, AiMark, AiNote, AiPick, AiThinking } from "@/components/ai/ai-kit";
+import { AiMarkdown } from "@/components/ai/ai-markdown";
+import { Button, Input, Select, Textarea } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import type { BoardData, CardDetail, WorkspaceTree } from "@/lib/types";
-import { useAiEnabled } from "@/lib/ai";
+import { useAiEnabled, useAiResult } from "@/lib/ai";
 import { parsePoints } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
@@ -432,21 +434,28 @@ export function CompletionPanel({ card }: { card: CardDetail }) {
 
 type Assist = { summary: string; canApply: boolean; subtasks: string[]; checklist: string[]; risks: string[]; filesRead: number };
 
+const ASSIST_STEPS = ["Leyendo la tarjeta y sus comentarios…", "Revisando los adjuntos…", "Armando el resumen y las sugerencias…"];
+
 /** Asistente con IA: resume la tarjeta (con sus PDF e imágenes) y propone subtareas y checklist. */
 export function CardAiAssist({ card, refresh }: { card: CardDetail; refresh: () => void }) {
   const [open, setOpen] = useState(false);
-  const [pickSub, setPickSub] = useState<Set<number>>(new Set());
-  const [pickChk, setPickChk] = useState<Set<number>>(new Set());
+  const [r, save] = useAiResult<Assist>(["assist", card.id]);
+  const [pickSub, setPickSub] = useState<Set<number>>(() => new Set(r?.subtasks.map((_, i) => i)));
+  const [pickChk, setPickChk] = useState<Set<number>>(() => new Set(r?.checklist.map((_, i) => i)));
+  const [applied, setApplied] = useState<Set<"subtasks" | "checklist">>(new Set());
   const run = useMutation({
+    mutationKey: ["ai-assist", card.id],
     mutationFn: () => api<Assist>(`/cards/${card.id}/ai/assist`, { method: "POST" }),
-    onSuccess: (r) => {
-      setPickSub(new Set(r.subtasks.map((_, i) => i)));
-      setPickChk(new Set(r.checklist.map((_, i) => i)));
+    onSuccess: (res) => {
+      save(res);
+      setPickSub(new Set(res.subtasks.map((_, i) => i)));
+      setPickChk(new Set(res.checklist.map((_, i) => i)));
+      setApplied(new Set());
     },
   });
   const apply = useMutation({
     mutationFn: async (kind: "subtasks" | "checklist") => {
-      const r = run.data!;
+      if (!r) return 0;
       if (kind === "subtasks") {
         for (const [i, title] of r.subtasks.entries()) if (pickSub.has(i)) await api(`/cards/${card.id}/subtasks`, { method: "POST", body: { title } });
         return pickSub.size;
@@ -455,7 +464,10 @@ export function CardAiAssist({ card, refresh }: { card: CardDetail; refresh: () 
       for (const [i, text] of r.checklist.entries()) if (pickChk.has(i)) await api(`/checklists/${id}/items`, { method: "POST", body: { text } });
       return pickChk.size;
     },
-    onSuccess: (n, kind) => toast.success(kind === "subtasks" ? `${n} subtareas agregadas` : `Checklist con ${n} ítems agregada`),
+    onSuccess: (n, kind) => {
+      setApplied((a) => new Set(a).add(kind));
+      toast.success(kind === "subtasks" ? `${n} subtareas agregadas` : `Checklist con ${n} ítems agregada`);
+    },
     onSettled: refresh,
   });
   const toggle = (set: Set<number>, i: number, update: (s: Set<number>) => void) => {
@@ -464,89 +476,111 @@ export function CardAiAssist({ card, refresh }: { card: CardDetail; refresh: () 
     else next.add(i);
     update(next);
   };
-  const r = run.data;
+  const allToggle = (items: string[], set: Set<number>, update: (s: Set<number>) => void) => (
+    <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => update(set.size === items.length ? new Set() : new Set(items.map((_, i) => i)))}>
+      {set.size === items.length ? "Ninguna" : "Todas"}
+    </button>
+  );
   return (
     <>
       <Button
         variant="secondary"
-        className="w-full justify-start"
+        className="ai-ghost w-full justify-start"
         onClick={() => {
           setOpen(true);
-          if (!run.data && !run.isPending) run.mutate();
+          if (!r && !run.isPending) run.mutate();
         }}
       >
         <Sparkles /> Explicar con IA
       </Button>
       {open && (
-        <Dialog open onOpenChange={setOpen} title="Asistente IA" description="Claude lee la tarjeta, sus comentarios y hasta 3 adjuntos (PDF, imágenes o texto). Si podés editar, también sugiere subtareas y checklist para que elijas cuáles agregar." wide>
+        <Dialog
+          open
+          onOpenChange={setOpen}
+          title={
+            <span className="flex items-center gap-2.5">
+              <AiMark size="sm" />
+              <span>
+                Asistente <span className="ai-text">IA</span>
+              </span>
+            </span>
+          }
+          description="Lee la tarjeta, sus comentarios y hasta 3 adjuntos. Si podés editar, también sugiere subtareas y checklist para que elijas cuáles agregar."
+          wide
+        >
           {run.isPending ? (
-            <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
-              <Spinner className="size-4" /> Leyendo la tarjeta…
-            </p>
-          ) : run.error ? (
-            <div className="space-y-3">
-              <p className="text-sm text-destructive">{(run.error as Error).message}</p>
-              <Button size="sm" variant="secondary" onClick={() => run.mutate()}>
-                Reintentar
-              </Button>
+            <div className="ai-surface rounded-2xl p-5">
+              <AiThinking steps={ASSIST_STEPS} lines={4} />
             </div>
+          ) : run.error ? (
+            <AiError error={run.error} retry={() => run.mutate()} />
           ) : r ? (
-            <div className="space-y-5">
-              <section>
-                <h3 className="mb-1 text-sm font-semibold">Resumen</h3>
-                <p className="text-sm leading-relaxed whitespace-pre-line">{r.summary}</p>
-                {r.filesRead > 0 && <p className="mt-1 text-xs text-muted-foreground">Leyó {r.filesRead} adjunto(s).</p>}
+            <div className="space-y-3">
+              <section className="ai-surface ai-reveal rounded-2xl p-5">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  <FileText className="size-3.5" /> De qué se trata
+                </p>
+                <AiMarkdown text={r.summary} />
+                {r.filesRead > 0 && (
+                  <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                    <Paperclip className="size-3" /> Leyó {r.filesRead} {r.filesRead === 1 ? "adjunto" : "adjuntos"}
+                  </p>
+                )}
               </section>
-              {r.subtasks.length > 0 && (
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold">Subtareas sugeridas</h3>
-                  <ul className="space-y-1.5">
-                    {r.subtasks.map((t, i) => (
-                      <li key={i}>
-                        <label className="flex items-start gap-2 text-sm">
-                          <input type="checkbox" className="mt-0.5 size-4 accent-[var(--primary)]" checked={pickSub.has(i)} onChange={() => toggle(pickSub, i, setPickSub)} />
+              <div className={cn("grid gap-3", r.subtasks.length > 0 && r.checklist.length > 0 && "md:grid-cols-2")}>
+                {r.subtasks.length > 0 && (
+                  <AiBlock icon={ListTree} title="Subtareas sugeridas" action={!applied.has("subtasks") && allToggle(r.subtasks, pickSub, setPickSub)} style={{ animationDelay: "60ms" }}>
+                    <div className="space-y-1">
+                      {r.subtasks.map((t, i) => (
+                        <AiPick key={i} checked={pickSub.has(i)} onChange={() => toggle(pickSub, i, setPickSub)}>
                           {t}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button size="sm" className="mt-2" disabled={pickSub.size === 0} loading={apply.isPending && apply.variables === "subtasks"} onClick={() => apply.mutate("subtasks")}>
-                    Agregar {pickSub.size} subtarea(s)
-                  </Button>
-                </section>
-              )}
-              {r.checklist.length > 0 && (
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold">Checklist sugerida</h3>
-                  <ul className="space-y-1.5">
-                    {r.checklist.map((t, i) => (
-                      <li key={i}>
-                        <label className="flex items-start gap-2 text-sm">
-                          <input type="checkbox" className="mt-0.5 size-4 accent-[var(--primary)]" checked={pickChk.has(i)} onChange={() => toggle(pickChk, i, setPickChk)} />
+                        </AiPick>
+                      ))}
+                    </div>
+                    {applied.has("subtasks") ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-sm text-success"><CheckCircle2 className="size-4" /> Agregadas a la tarjeta</p>
+                    ) : (
+                      <Button size="sm" className="ai-cta mt-3 w-full" disabled={pickSub.size === 0} loading={apply.isPending && apply.variables === "subtasks"} onClick={() => apply.mutate("subtasks")}>
+                        <Plus /> Agregar {pickSub.size} {pickSub.size === 1 ? "subtarea" : "subtareas"}
+                      </Button>
+                    )}
+                  </AiBlock>
+                )}
+                {r.checklist.length > 0 && (
+                  <AiBlock icon={ListChecks} title="Checklist sugerida" action={!applied.has("checklist") && allToggle(r.checklist, pickChk, setPickChk)} style={{ animationDelay: "120ms" }}>
+                    <div className="space-y-1">
+                      {r.checklist.map((t, i) => (
+                        <AiPick key={i} checked={pickChk.has(i)} onChange={() => toggle(pickChk, i, setPickChk)}>
                           {t}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button size="sm" className="mt-2" disabled={pickChk.size === 0} loading={apply.isPending && apply.variables === "checklist"} onClick={() => apply.mutate("checklist")}>
-                    Agregar como checklist
-                  </Button>
-                </section>
-              )}
+                        </AiPick>
+                      ))}
+                    </div>
+                    {applied.has("checklist") ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-sm text-success"><CheckCircle2 className="size-4" /> Checklist agregada</p>
+                    ) : (
+                      <Button size="sm" className="ai-cta mt-3 w-full" disabled={pickChk.size === 0} loading={apply.isPending && apply.variables === "checklist"} onClick={() => apply.mutate("checklist")}>
+                        <Plus /> Agregar como checklist
+                      </Button>
+                    )}
+                  </AiBlock>
+                )}
+              </div>
               {r.risks.length > 0 && (
-                <section>
-                  <h3 className="mb-1 text-sm font-semibold">Riesgos</h3>
-                  <ul className="list-disc space-y-1 pl-5 text-sm">
+                <AiBlock icon={AlertTriangle} title="Riesgos a tener en cuenta" tone="risk" style={{ animationDelay: "180ms" }}>
+                  <ul className="space-y-1.5 text-sm">
                     {r.risks.map((t, i) => (
-                      <li key={i}>{t}</li>
+                      <li key={i} className="flex gap-2.5">
+                        <span aria-hidden className="mt-[0.55em] size-1.5 shrink-0 rounded-full bg-amber-500" />
+                        <span>{t}</span>
+                      </li>
                     ))}
                   </ul>
-                </section>
+                </AiBlock>
               )}
-              <div className="flex items-center justify-between border-t pt-3">
-                <p className="text-xs text-muted-foreground">Sugerencias de IA: pueden tener errores.</p>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <AiNote />
                 <Button size="sm" variant="ghost" onClick={() => run.mutate()}>
-                  Generar de nuevo
+                  <RotateCcw /> Generar de nuevo
                 </Button>
               </div>
             </div>

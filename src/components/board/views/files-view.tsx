@@ -1,7 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, FileText, Sparkles, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Download, ExternalLink, FileText, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
+import { AiError, AiMark, AiNote, AiThinking } from "@/components/ai/ai-kit";
+import { AiMarkdown } from "@/components/ai/ai-markdown";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/overlay";
@@ -27,6 +29,15 @@ type BoardFile = {
 
 const size = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
 const ext = (name: string) => name.split(".").pop()?.slice(0, 4).toUpperCase() ?? "";
+// Color por tipo de archivo, para reconocerlos de un vistazo.
+const extTone = (name: string) => {
+  const e = ext(name);
+  if (e === "PDF") return "bg-red-500/10 text-red-600 dark:text-red-400";
+  if (e === "DOCX" || e === "TXT" || e === "MD") return "bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  if (e === "XLSX" || e === "CSV") return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  if (e === "PPTX") return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
+  return "bg-muted text-muted-foreground";
+};
 
 /** Archivos del tablero: PDF, imágenes y documentos compartidos por el equipo, con ayuda de IA. */
 export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: string; canEdit: boolean; onGenerateTasks: (fileId: string) => void }) {
@@ -34,6 +45,7 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [preview, setPreview] = useState<BoardFile | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const aiEnabled = useAiEnabled();
   const key = ["board-files", boardId];
   const q = useQuery({ queryKey: key, queryFn: () => api<{ files: BoardFile[] }>(`/boards/${boardId}/files`) });
@@ -54,7 +66,10 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
   const remove = useMutation({ mutationFn: (id: string) => api(`/board-files/${id}`, { method: "DELETE" }), onSettled: refresh });
   const summarize = useMutation({
     mutationFn: (id: string) => api<{ summary: string }>(`/board-files/${id}/ai/summary`, { method: "POST" }),
-    onSuccess: () => toast.success("Resumen listo"),
+    onSuccess: (_, id) => {
+      setExpanded((e) => new Set(e).add(id));
+      toast.success("Resumen listo");
+    },
     onSettled: refresh,
   });
 
@@ -128,7 +143,7 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
                     <img src={`/api/v1/board-files/${f.id}/download?inline=1`} alt="" className="size-14 rounded-xl object-cover" />
                   </button>
                 ) : (
-                  <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-muted text-xs font-bold text-muted-foreground">{ext(f.fileName)}</span>
+                  <span className={cn("flex size-14 shrink-0 items-center justify-center rounded-xl text-xs font-bold", extTone(f.fileName))}>{ext(f.fileName)}</span>
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium" title={f.fileName}>
@@ -140,13 +155,35 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
                 </div>
               </div>
 
-              {f.aiSummary && (
-                <div className="mt-3 rounded-xl bg-muted/60 p-3 text-xs leading-relaxed whitespace-pre-line">
-                  <p className="mb-1 flex items-center gap-1 font-semibold text-muted-foreground">
-                    <Sparkles className="size-3" /> Resumen con IA
-                  </p>
-                  {f.aiSummary}
+              {summarize.isPending && summarize.variables === f.id ? (
+                <div className="ai-surface mt-3 rounded-2xl p-3.5">
+                  <AiThinking compact lines={3} steps={["Leyendo el archivo…", "Sacando los puntos clave…", "Escribiendo el resumen…"]} />
                 </div>
+              ) : summarize.error && summarize.variables === f.id ? (
+                <AiError className="mt-3" error={summarize.error} retry={() => summarize.mutate(f.id)} />
+              ) : (
+                f.aiSummary && (
+                  <div className="ai-surface mt-3 rounded-2xl p-3.5">
+                    <button
+                      className="flex w-full items-center gap-2 text-left"
+                      aria-expanded={expanded.has(f.id)}
+                      onClick={() => setExpanded((e) => {
+                        const n = new Set(e);
+                        if (n.has(f.id)) n.delete(f.id);
+                        else n.add(f.id);
+                        return n;
+                      })}
+                    >
+                      <AiMark size="sm" />
+                      <span className="flex-1 text-xs font-semibold">Resumen con <span className="ai-text">IA</span></span>
+                      {f.aiSummaryAt && <span className="text-[11px] text-muted-foreground">{ago(f.aiSummaryAt)}</span>}
+                      <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", expanded.has(f.id) && "rotate-180")} />
+                    </button>
+                    <div className={cn("mt-2.5 text-[0.8rem] [&_.text-sm]:text-[0.8rem]", !expanded.has(f.id) && "line-clamp-3")}>
+                      <AiMarkdown text={f.aiSummary} />
+                    </div>
+                  </div>
+                )
               )}
 
               <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
@@ -165,11 +202,11 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
                 </a>
                 {aiEnabled && canEdit && f.aiReadable && (
                   <>
-                    <Button size="sm" variant="secondary" loading={summarize.isPending && summarize.variables === f.id} onClick={() => summarize.mutate(f.id)}>
+                    <Button size="sm" variant="secondary" className="ai-ghost" disabled={summarize.isPending && summarize.variables === f.id} onClick={() => summarize.mutate(f.id)}>
                       <Sparkles /> {f.aiSummary ? "Volver a resumir" : "Resumir"}
                     </Button>
-                    <Button size="sm" variant="secondary" onClick={() => onGenerateTasks(f.id)}>
-                      <Sparkles /> Crear tareas
+                    <Button size="sm" variant="secondary" className="ai-ghost" onClick={() => onGenerateTasks(f.id)}>
+                      <Wand2 /> Crear tareas
                     </Button>
                   </>
                 )}
@@ -187,7 +224,7 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
           ))}
         </ul>
       )}
-      {aiEnabled && <p className="mt-6 text-xs text-muted-foreground">Las funciones de IA envían el archivo elegido a Anthropic (Claude) para procesarlo. Solo se envía cuando lo pedís.</p>}
+      {aiEnabled && <AiNote className="mt-6">Las funciones de IA envían el archivo elegido a Anthropic (Claude) para procesarlo, solo cuando lo pedís. Lee PDF, imágenes y texto.</AiNote>}
 
       {preview && (
         <Dialog open onOpenChange={(o) => !o && setPreview(null)} title={preview.fileName} wide>

@@ -274,7 +274,7 @@ export function BoardView({ boardId }: { boardId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <FiltersButton data={data} filters={filters} setFilters={setFilters} />
             {aiEnabled && (
-              <Button variant="secondary" size="sm" onClick={() => setPanel("ask")} title="Preguntale al tablero con IA">
+              <Button variant="secondary" size="sm" className="ai-ghost" onClick={() => setPanel("ask")} title="Preguntale al tablero con IA">
                 <Sparkles /> <span className="hidden sm:inline">Preguntar</span>
               </Button>
             )}

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CircleCheck, Sparkles, CircleX, Clock, GitPullRequest, Loader, ShieldCheck } from "lucide-react";
-import { Button, ErrorState, Skeleton, Spinner } from "@/components/ui/primitives";
-import { useAiEnabled } from "@/lib/ai";
+import { AlertTriangle, ArrowRight, Ban, CircleCheck, Sparkles, CircleX, Clock, GitPullRequest, Loader, RotateCcw, ShieldCheck, Star } from "lucide-react";
+import { AiBlock, AiError, AiMark, AiNote, AiThinking } from "@/components/ai/ai-kit";
+import { Button, ErrorState, Skeleton } from "@/components/ui/primitives";
+import { useAiEnabled, useAiResult } from "@/lib/ai";
 import { Avatar } from "@/components/ui/user-avatar";
 import { api } from "@/lib/api";
 import { ago, fmtShort } from "@/lib/format";
@@ -495,51 +496,57 @@ type Briefing = { headline: string; highlights: string[]; risks: string[]; nextA
 /** Resumen ejecutivo redactado por IA a partir de los indicadores de este panel (no inventa datos). */
 function AiBriefing({ boardId }: { boardId: string }) {
   const enabled = useAiEnabled();
-  const run = useMutation({ mutationFn: () => api<Briefing>(`/boards/${boardId}/ai/briefing`, { method: "POST" }) });
+  const [b, save] = useAiResult<Briefing>(["briefing", boardId]);
+  const run = useMutation({ mutationKey: ["ai-briefing", boardId], mutationFn: () => api<Briefing>(`/boards/${boardId}/ai/briefing`, { method: "POST" }), onSuccess: save });
   if (!enabled) return null;
-  const b = run.data;
+  const columns = b
+    ? ([
+        { icon: Star, title: "Lo más importante", items: b.highlights, tone: "default" },
+        { icon: AlertTriangle, title: "Riesgos", items: b.risks, tone: "risk" },
+        { icon: ArrowRight, title: "Próximas acciones", items: b.nextActions, tone: "good" },
+      ] as const)
+    : [];
   return (
-    <section className="mb-6 rounded-[2rem] border border-primary/30 bg-card p-6" aria-label="Resumen con IA">
+    <section className="ai-surface mb-6 rounded-[2rem] p-6" aria-label="Resumen con IA">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="flex flex-1 items-center gap-2 text-lg">
-          <Sparkles className="size-4 text-primary" /> Resumen con IA
-        </h2>
-        <Button size="sm" variant={b ? "secondary" : "primary"} loading={run.isPending} onClick={() => run.mutate()}>
-          {b ? "Actualizar" : "Generar resumen"}
+        <AiMark />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg">
+            Resumen con <span className="ai-text font-medium">IA</span>
+          </h2>
+          <p className="text-xs text-muted-foreground">{b ? `Generado ${ago(b.generatedAt)}` : "El estado del tablero en un minuto de lectura"}</p>
+        </div>
+        <Button size="sm" variant={b ? "secondary" : "primary"} className={b ? undefined : "ai-cta"} disabled={run.isPending} onClick={() => run.mutate()}>
+          {b ? <RotateCcw /> : <Sparkles />} {b ? "Actualizar" : "Generar resumen"}
         </Button>
       </div>
-      {!b && !run.isPending && (
-        <p className="mt-2 text-sm text-muted-foreground">Claude redacta el estado del tablero a partir de los indicadores de este panel: sin descripciones ni comentarios, y sin inventar datos.</p>
+      {!b && !run.isPending && !run.error && (
+        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Claude redacta el estado del tablero a partir de los indicadores de este panel: qué importa, qué riesgos hay y qué conviene hacer. No lee descripciones ni comentarios, y no inventa datos.</p>
       )}
-      {run.isPending && (
-        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
-          <Spinner className="size-4" /> Analizando los indicadores…
-        </p>
-      )}
-      {run.error && <p className="mt-3 text-sm text-destructive">{(run.error as Error).message}</p>}
-      {b && (
-        <div className="mt-4 space-y-4">
-          <p className="display-title text-2xl">{b.headline}</p>
-          <div className="grid gap-4 md:grid-cols-3">
-            {(
-              [
-                ["Lo más importante", b.highlights],
-                ["Riesgos", b.risks],
-                ["Próximas acciones", b.nextActions],
-              ] as const
-            ).map(([title, items]) => (
-              <div key={title}>
-                <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{title}</h3>
-                <ul className="list-disc space-y-1 pl-4 text-sm">
-                  {items.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                  {items.length === 0 && <li className="list-none text-muted-foreground">—</li>}
-                </ul>
-              </div>
+      {run.isPending && <AiThinking className="mt-5" steps={["Leyendo los indicadores del panel…", "Buscando riesgos y avances…", "Redactando el resumen…"]} lines={3} />}
+      {run.error && !run.isPending && <AiError className="mt-4" error={run.error} retry={() => run.mutate()} />}
+      {b && !run.isPending && (
+        <div className="mt-5 space-y-4">
+          <p className="display-title ai-reveal text-2xl sm:text-3xl">{b.headline}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {columns.map((c, n) => (
+              <AiBlock key={c.title} icon={c.icon} title={c.title} tone={c.tone} style={{ animationDelay: `${80 + n * 60}ms` }}>
+                {c.items.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nada para destacar.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm leading-relaxed">
+                    {c.items.map((t) => (
+                      <li key={t} className="flex gap-2.5">
+                        <span aria-hidden className={cn("mt-[0.55em] size-1.5 shrink-0 rounded-full", c.tone === "risk" ? "bg-amber-500" : c.tone === "good" ? "bg-success" : "bg-[var(--ai-via)]")} />
+                        <span>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </AiBlock>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">Generado {ago(b.generatedAt)} · revisalo antes de compartirlo.</p>
+          <AiNote>Generado con IA a partir de los indicadores: revisalo antes de compartirlo.</AiNote>
         </div>
       )}
     </section>
