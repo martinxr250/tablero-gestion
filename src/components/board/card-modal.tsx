@@ -55,7 +55,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
   });
 
   return (
-    <Dialog open onOpenChange={(o) => !o && (!descriptionDirty.current || confirm("Tenés cambios sin guardar en la descripción. ¿Cerrar igual?")) && onClose()} wide title={card ? <CardTitle key={card.title} card={card} canEdit={canEdit} onSave={(title) => patch.mutate({ title })} /> : "Cargando…"}>
+    <Dialog open onOpenChange={(o) => !o && (!descriptionDirty.current || confirm("Tenés cambios sin guardar en la descripción. ¿Cerrar igual?")) && onClose()} wide className="border bg-background sm:max-w-5xl dark:border-white/10" title={card ? <CardTitle key={card.title} card={card} canEdit={canEdit} onSave={(title) => patch.mutate({ title })} /> : "Cargando…"}>
       {q.error ? (
         <p className="text-sm text-destructive">{q.error instanceof ApiError && q.error.status === 404 ? "La tarjeta no existe o no tenés acceso." : (q.error as Error).message}</p>
       ) : !card || loadingSource ? (
@@ -64,11 +64,15 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
           <Skeleton className="h-32" />
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-[1fr_220px]">
-          <div className="min-w-0 space-y-6">
-            <p className="-mt-2 text-sm text-muted-foreground">
-              en la lista <strong className="text-foreground">{card.listName}</strong>
-              {card.createdByName && ` · creada por ${card.createdByName}`} · {ago(card.createdAt)}
+        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
+          {/* Cada sección es una tarjeta propia sobre el fondo del modal: así se distingue qué es qué. */}
+          <div className="min-w-0 space-y-4 [&>section]:rounded-2xl [&>section]:border [&>section]:bg-card [&>section]:p-5">
+            <p className="-mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-xs font-medium text-foreground">
+                <span className="size-1.5 rounded-full bg-primary" /> {card.listName}
+              </span>
+              {card.createdByName && <span>creada por {card.createdByName}</span>}
+              <span>· {ago(card.createdAt)}</span>
             </p>
             {card.archivedAt && (
               <div className="rounded-xl bg-amber-100 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/15 dark:text-amber-100">
@@ -106,12 +110,12 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
 
 function CardTitle({ card, canEdit, onSave }: { card: CardDetail; canEdit: boolean; onSave: (t: string) => void }) {
   const [value, setValue] = useState(card.title);
-  if (!canEdit) return <span className="block">{card.title}</span>;
+  if (!canEdit) return <span className="block text-2xl font-semibold tracking-tight">{card.title}</span>;
   return (
     <span className="block">
       <input
         aria-label="Título de la tarjeta"
-        className="w-full rounded-lg bg-transparent px-1 text-lg font-semibold outline-none focus:bg-muted"
+        className="w-full rounded-xl bg-transparent px-1.5 py-0.5 text-2xl font-semibold tracking-tight outline-none hover:bg-muted/60 focus:bg-muted"
         value={value}
         maxLength={200}
         onChange={(e) => setValue(e.target.value)}
@@ -143,7 +147,7 @@ function MetaRow({ card, board }: { card: CardDetail; board: BoardData }) {
   const due = dueState(card.dueAt, !!card.completedAt);
   const p = PRIORITY[card.priority] ?? PRIORITY.none!;
   return (
-    <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border text-sm sm:grid-cols-5 [&>div]:min-w-0 [&>div]:bg-card [&>div]:px-4 [&>div]:py-3">
       <div>
         <p className="mb-1.5 text-xs font-medium text-muted-foreground">Responsable</p>
         {owner ? (
@@ -788,16 +792,18 @@ function Sidebar({
 
   const editors = board.people;
   return (
-    <aside className="space-y-4 text-sm">
+    <aside className="space-y-4 self-start rounded-2xl border bg-card p-4 text-sm md:sticky md:top-0">
       <Button
-        variant={card.completedAt ? "soft" : "secondary"}
-        className="w-full justify-start"
+        variant={card.completedAt ? "soft" : "primary"}
+        className="h-10 w-full justify-start"
         disabled={!canEdit}
         onClick={() => patch({ completed: !card.completedAt })}
       >
         {card.completedAt ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-4 w-4" />}
         {card.completedAt ? "Completada" : "Marcar como completada"}
       </Button>
+
+      <p className="border-t pt-4 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Detalles</p>
 
       <div className="space-y-1.5">
         <label htmlFor="card-owner" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -864,6 +870,7 @@ function Sidebar({
         </Select>
       </div>
 
+      <p className="border-t pt-4 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Planificación</p>
       <PlanningSidebar card={card} board={board} canEdit={canEdit} patch={patch} onOpenCard={onOpenCard} />
 
       {canEdit && !card.archivedAt && (
