@@ -14,10 +14,10 @@ import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type ActionUi = { title: string; detail?: string; status: "pending" | "done" | "declined" | "error"; error?: string };
-type Item = { type: "user"; text: string; at?: string } | { type: "assistant"; text: string; at?: string } | { type: "steps"; items: ActionUi[] } | { type: "actions"; items: (ActionUi & { id: string })[] };
-type Conversation = { id: string; title: string; items: Item[]; pending: { id: string; title: string; detail?: string; tool: string }[]; busy: boolean; updatedAt: string };
-type Reply = { status: "done" | "needs_confirmation" | "continue"; conversation: Conversation };
+export type ActionUi = { title: string; detail?: string; status: "pending" | "done" | "declined" | "error"; error?: string };
+export type Item = { type: "user"; text: string; at?: string } | { type: "assistant"; text: string; at?: string } | { type: "steps"; items: ActionUi[] } | { type: "actions"; items: (ActionUi & { id: string })[] };
+export type Conversation = { id: string; title: string; items: Item[]; pending: { id: string; title: string; detail?: string; tool: string }[]; busy: boolean; updatedAt: string };
+export type Reply = { status: "done" | "needs_confirmation" | "continue"; conversation: Conversation };
 
 const STARTERS = [
   { icon: CalendarClock, text: "¿Qué tengo vencido o por vencer? Proponé cómo reprogramarlo." },
@@ -286,7 +286,7 @@ export function AssistantChat() {
   );
 }
 
-function ItemView({ item, onLink }: { item: Item; onLink: (kind: "card" | "board" | "design", id: string) => void }) {
+export function ItemView({ item, onLink }: { item: Item; onLink: (kind: "card" | "board" | "design", id: string) => void }) {
   if (item.type === "user") return <p className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-2 text-sm whitespace-pre-line text-primary-foreground">{item.text}</p>;
   if (item.type === "assistant")
     return (
@@ -323,7 +323,7 @@ function ItemView({ item, onLink }: { item: Item; onLink: (kind: "card" | "board
   );
 }
 
-function Confirmation({ pending, onDecide }: { pending: Conversation["pending"]; onDecide: (approve: string[]) => void }) {
+export function Confirmation({ pending, onDecide }: { pending: Conversation["pending"]; onDecide: (approve: string[]) => void }) {
   const [on, setOn] = useState<Set<string>>(() => new Set(pending.map((p) => p.id)));
   return (
     <div className="ai-surface ai-reveal ml-9 rounded-3xl p-4 sm:p-5">

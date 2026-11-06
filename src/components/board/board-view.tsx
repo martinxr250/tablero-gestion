@@ -450,7 +450,7 @@ export function BoardView({ boardId }: { boardId: string }) {
         }}
       />
       {panel === "duplicate" && <DuplicateBoardDialog data={data} onClose={() => setPanel(null)} />}
-      {panel === "ask" && <AskBoard boardId={data.board.id} onOpenCard={(id) => openCard(id)} onClose={() => setPanel(null)} />}
+      {panel === "ask" && <AskBoard boardId={data.board.id} orgId={data.board.orgId} boardName={data.board.name} onOpenCard={(id) => openCard(id)} onClose={() => setPanel(null)} />}
       {openCardId && <CardModal key={openCardId} cardId={openCardId} board={data} onClose={() => openCard(null)} onOpenCard={(id) => openCard(id)} />}
       {panel === "settings" && <BoardSettingsDialog data={data} onClose={() => setPanel(null)} />}
       {panel === "archived" && <ArchivedDialog data={data} canEdit={canEdit} onOpenCard={openCard} onClose={() => setPanel(null)} />}

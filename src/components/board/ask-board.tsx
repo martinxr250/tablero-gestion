@@ -1,63 +1,118 @@
 "use client";
 
-import { useMutation, useMutationState } from "@tanstack/react-query";
-import { AlarmClock, ArrowUp, Ban, Check, Copy, History, MessageSquarePlus, SquareKanban, Target, UserRound } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlarmClock, ArrowUp, Ban, History, ListPlus, MessageSquarePlus, Target, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AiError, AiMark, AiNote, AiThinking } from "@/components/ai/ai-kit";
-import { AiMarkdown } from "@/components/ai/ai-markdown";
-import { askHistory, useAskHistory } from "@/lib/ai-chat";
-import { ago } from "@/lib/format";
+import { Confirmation, ItemView, type Conversation, type Item, type Reply } from "@/components/assistant/assistant-chat";
 import { Button } from "@/components/ui/primitives";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
-// Preguntas frecuentes de cualquier rol: ponerse al día, ver bloqueos, vencimientos y lo propio.
+// Preguntas y pedidos frecuentes de cualquier rol: ponerse al día, ver bloqueos y también actuar.
 const SUGGESTIONS = [
   { icon: History, text: "Poneme al día: ¿qué pasó esta semana?" },
   { icon: Ban, text: "¿Qué está bloqueado y por qué?" },
   { icon: AlarmClock, text: "¿Qué vence en los próximos días?" },
   { icon: UserRound, text: "¿En qué estoy trabajando yo y qué me falta?" },
-  { icon: Target, text: "¿Cómo viene la etapa en curso?" },
+  { icon: ListPlus, text: "Creá las tarjetas para preparar la próxima entrega y repartilas entre el equipo." },
+  { icon: Target, text: "Ordená las tarjetas vencidas: proponé nuevas fechas y prioridades." },
 ];
 
-const STEPS = ["Leyendo las tarjetas del tablero…", "Revisando la actividad reciente…", "Armando la respuesta…"];
+const storeKey = (boardId: string) => `ask-board-conv:${boardId}`;
+const readConv = (boardId: string) => {
+  try {
+    return sessionStorage.getItem(storeKey(boardId));
+  } catch {
+    return null;
+  }
+};
 
-/** Preguntale al tablero: respuestas con IA basadas solo en lo que la persona puede ver. */
-export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; onOpenCard: (id: string) => void; onClose: () => void }) {
+/**
+ * Preguntale al tablero: el asistente con acciones, enfocado en este tablero. Responde con lo que la
+ * persona puede ver y, si se lo pide, crea o cambia tarjetas después de que ella lo confirme.
+ */
+export function AskBoard({ boardId, orgId, boardName, onOpenCard, onClose }: { boardId: string; orgId: string; boardName: string; onOpenCard: (id: string) => void; onClose: () => void }) {
+  const qc = useQueryClient();
+  const router = useRouter();
+  const [convId, setConvId] = useState<string | null>(() => readConv(boardId));
   const [question, setQuestion] = useState("");
-  const history = useAskHistory(boardId);
-  const [copied, setCopied] = useState<number | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  const ask = useMutation({
-    mutationKey: ["ai-ask", boardId],
-    mutationFn: (q: string) => api<{ answer: string; cards: { id: string; title: string }[] }>(`/boards/${boardId}/ai/ask`, { method: "POST", body: { question: q } }),
-    // Se guarda aunque el panel se haya cerrado mientras la IA respondía.
-    onSuccess: (r, q) => askHistory.add(boardId, { question: q, ...r, at: new Date().toISOString() }),
+  const context = { boardId };
+
+  const conv = useQuery({ queryKey: ["assistant", convId], queryFn: () => api<Conversation>(`/assistant/conversations/${convId}`), enabled: !!convId, retry: false,
+    // Si se cerró el panel mientras respondía, al volver se sigue hasta que termine.
+    refetchInterval: (q) => (q.state.data?.busy ? 2500 : false),
   });
-  // Si se cerró y se volvió a abrir mientras respondía, se sigue mostrando la espera.
-  const pendingElsewhere = useMutationState({ filters: { mutationKey: ["ai-ask", boardId], status: "pending" }, select: (m) => m.state.variables as string });
-  const pendingQ = ask.isPending ? ask.variables : pendingElsewhere.at(-1);
-  const pending = pendingQ !== undefined;
-  const send = (q: string) => {
-    if (q.trim().length >= 3 && !pending) {
-      ask.mutate(q.trim());
-      setQuestion("");
+  const pick = (id: string | null) => {
+    setConvId(id);
+    try {
+      if (id) sessionStorage.setItem(storeKey(boardId), id);
+      else sessionStorage.removeItem(storeKey(boardId));
+    } catch {
+      /* sin almacenamiento */
     }
   };
+  const apply = (r: Reply) => {
+    qc.setQueryData(["assistant", r.conversation.id], r.conversation);
+    // Las acciones pueden haber cambiado el tablero.
+    qc.invalidateQueries({ queryKey: ["board"] });
+    qc.invalidateQueries({ queryKey: ["card"] });
+  };
+  const keepGoing = async (id: string, r: Reply): Promise<Reply> => {
+    let cur = r;
+    for (let i = 0; i < 3 && cur.status === "continue"; i++) {
+      apply(cur);
+      cur = await api<Reply>(`/assistant/conversations/${id}/continue`, { method: "POST", body: { context } });
+    }
+    return cur;
+  };
+
+  // Se guarda en el servidor: sigue ahí aunque se cierre el panel mientras responde.
+  const send = useMutation({
+    mutationFn: async (message: string) => {
+      let id = conv.error ? null : convId;
+      if (!id) {
+        id = (await api<{ id: string }>(`/orgs/${orgId}/assistant/conversations`, { method: "POST" })).id;
+        pick(id);
+      }
+      setSending(message);
+      return keepGoing(id, await api<Reply>(`/assistant/conversations/${id}/messages`, { method: "POST", body: { text: message, context } }));
+    },
+    onSuccess: apply,
+    onSettled: () => setSending(null),
+  });
+  const confirm = useMutation({
+    mutationFn: async (approve: string[]) => keepGoing(convId!, await api<Reply>(`/assistant/conversations/${convId}/confirm`, { method: "POST", body: { approve, context } })),
+    onSuccess: apply,
+  });
+
+  const submit = (q: string) => {
+    const m = q.trim();
+    if (m.length < 2 || send.isPending || confirm.isPending) return;
+    setQuestion("");
+    send.mutate(m);
+  };
+  const raw = convId && !conv.error ? conv.data : undefined;
+  const items = (raw?.items ?? []).reduce<Item[]>((acc, it) => {
+    const last = acc.at(-1);
+    if (it.type === "steps" && last?.type === "steps") acc[acc.length - 1] = { type: "steps", items: [...last.items, ...it.items] };
+    else acc.push(it);
+    return acc;
+  }, []);
+  const working = send.isPending || confirm.isPending || !!raw?.busy;
+  const empty = items.length === 0 && !sending && !working;
+
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [history.length, pending, ask.error]);
-  const copy = async (i: number, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(i);
-      setTimeout(() => setCopied((c) => (c === i ? null : c)), 1500);
-    } catch {
-      /* el portapapeles puede no estar disponible */
-    }
+  }, [items.length, raw?.pending.length, working]);
+
+  const openLink = async (kind: "card" | "board" | "design", id: string) => {
+    if (kind === "card") return onOpenCard(id);
+    router.push(kind === "board" ? `/b/${id}` : `/studio/${id}`);
   };
-  const empty = history.length === 0 && !pending && !ask.error;
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
@@ -69,10 +124,10 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
               <SheetTitle className="text-lg font-bold">
                 Preguntale al <span className="ai-text">tablero</span>
               </SheetTitle>
-              <SheetDescription className="text-xs">Responde con las tarjetas y la actividad de las últimas dos semanas que vos podés ver.</SheetDescription>
+              <SheetDescription className="text-xs">Consultá o pedile cambios sobre «{boardName}». Antes de crear o modificar algo, te pide confirmación.</SheetDescription>
             </div>
-            {history.length > 0 && (
-              <Button size="sm" variant="ghost" className="mr-8 shrink-0" disabled={pending} onClick={() => askHistory.clear(boardId)} title="Empezar una conversación nueva">
+            {items.length > 0 && (
+              <Button size="sm" variant="ghost" className="mr-8 shrink-0" disabled={working} onClick={() => pick(null)} title="Empezar una conversación nueva">
                 <MessageSquarePlus /> <span className="hidden sm:inline">Nueva</span>
               </Button>
             )}
@@ -84,18 +139,17 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
             <div className="ai-reveal space-y-4">
               <div className="ai-surface rounded-3xl p-5 text-center">
                 <AiMark size="lg" className="mx-auto" />
-                <p className="mt-3 text-base font-semibold">¿Qué querés saber?</p>
-                <p className="mt-1 text-sm text-muted-foreground">Preguntá en tus palabras: estado, bloqueos, vencimientos o qué te toca hacer.</p>
+                <p className="mt-3 text-base font-semibold">¿Qué querés saber o hacer?</p>
+                <p className="mt-1 text-sm text-muted-foreground">Preguntá por el estado, los bloqueos o lo que te toca, o pedile que cree, mueva, asigne o comente tarjetas.</p>
               </div>
-              <p className="px-1 text-xs font-medium text-muted-foreground">Para empezar</p>
-              <ul className="space-y-2">
+              <ul className="grid gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map(({ icon: Icon, text }, i) => (
                   <li key={text} className="ai-reveal" style={{ animationDelay: `${60 + i * 40}ms` }}>
                     <button
-                      onClick={() => send(text)}
-                      className="group flex w-full items-center gap-3 rounded-2xl border bg-card px-3.5 py-2.5 text-left text-sm transition-colors hover:border-[color-mix(in_oklch,var(--ai-via)_45%,var(--border))] hover:bg-muted/40"
+                      onClick={() => submit(text)}
+                      className="group flex h-full w-full items-start gap-3 rounded-2xl border bg-card px-3.5 py-2.5 text-left text-sm transition-colors hover:border-[color-mix(in_oklch,var(--ai-via)_45%,var(--border))] hover:bg-muted/40"
                     >
-                      <Icon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[var(--ai-via)]" />
+                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[var(--ai-via)]" />
                       {text}
                     </button>
                   </li>
@@ -103,54 +157,33 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
               </ul>
             </div>
           ) : (
-            <ol className="space-y-8" aria-live="polite">
-              {history.map((h, i) => (
-                <li key={i} className="space-y-3">
-                  <p className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-2 text-sm text-primary-foreground">{h.question}</p>
-                  <div className="flex gap-3">
-                    <AiMark size="sm" className="mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <AiMarkdown text={h.answer} cards={h.cards} onOpenCard={onOpenCard} />
-                      {h.cards.length > 0 && (
-                        <div className="mt-4 rounded-2xl border bg-muted/30 p-3">
-                          <p className="mb-2 text-[11px] font-medium text-muted-foreground">Tarjetas mencionadas · tocá para abrir</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {h.cards.map((c) => (
-                              <button
-                                key={c.id}
-                                onClick={() => onOpenCard(c.id)}
-                                title={c.title}
-                                className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs transition-colors hover:border-primary/50 hover:text-primary"
-                              >
-                                <SquareKanban className="size-3 shrink-0" />
-                                <span className="truncate">{c.title}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-muted-foreground">{ago(h.at)}</span>
-                        <button onClick={() => copy(i, h.answer)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground">
-                          {copied === i ? <Check className="size-3" /> : <Copy className="size-3" />}
-                          {copied === i ? "Copiado" : "Copiar"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+            <ol className="space-y-6" aria-live="polite">
+              {items.map((it, i) => (
+                <li key={i}>
+                  <ItemView item={it} onLink={openLink} />
                 </li>
               ))}
-              {pending && (
-                <li className="space-y-3">
-                  <p className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-primary/80 px-4 py-2 text-sm text-primary-foreground">{pendingQ}</p>
-                  <div className="ai-surface rounded-2xl px-4 py-4">
-                    <AiThinking steps={STEPS} compact />
+              {sending && !(items.at(-1)?.type === "user" && (items.at(-1) as { text: string }).text === sending) && (
+                <li>
+                  <p className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-primary/85 px-4 py-2 text-sm whitespace-pre-line text-primary-foreground">{sending}</p>
+                </li>
+              )}
+              {working && (
+                <li className="flex gap-3">
+                  <AiMark size="sm" className="mt-0.5" />
+                  <div className="ai-surface flex-1 rounded-2xl px-4 py-3.5">
+                    <AiThinking compact lines={2} steps={confirm.isPending ? ["Haciendo los cambios…", "Revisando que todo quedó bien…"] : ["Leyendo el tablero…", "Revisando la actividad reciente…", "Preparando la respuesta…"]} />
                   </div>
                 </li>
               )}
-              {ask.error && !pending && (
+              {!working && raw && raw.pending.length > 0 && (
                 <li>
-                  <AiError error={ask.error} retry={ask.variables ? () => ask.mutate(ask.variables!) : undefined} />
+                  <Confirmation key={raw.pending.map((p) => p.id).join()} pending={raw.pending} onDecide={(ids) => confirm.mutate(ids)} />
+                </li>
+              )}
+              {(send.error || confirm.error) && !working && (
+                <li>
+                  <AiError error={send.error ?? confirm.error} retry={send.error && send.variables ? () => send.mutate(send.variables!) : undefined} />
                 </li>
               )}
             </ol>
@@ -162,31 +195,32 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
           className="border-t bg-background/80 px-4 pt-3 pb-4 backdrop-blur sm:px-8"
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
-            send(question);
+            submit(question);
           }}
         >
-          <div className={cn("flex items-end gap-2 rounded-2xl border bg-card p-1.5 pl-3.5 transition-colors focus-within:border-[color-mix(in_oklch,var(--ai-via)_55%,var(--border))]")}>
+          {raw && raw.pending.length > 0 && !working && <p className="mb-2 text-xs text-muted-foreground">Si escribís otra cosa, los cambios sin confirmar se descartan.</p>}
+          <div className="flex items-end gap-2 rounded-2xl border bg-card p-1.5 pl-3.5 transition-colors focus-within:border-[color-mix(in_oklch,var(--ai-via)_55%,var(--border))]">
             <textarea
               rows={1}
-              maxLength={500}
+              maxLength={4000}
               autoFocus
-              placeholder="Escribí tu pregunta…"
-              aria-label="Pregunta"
+              placeholder="Preguntá o pedí un cambio…"
+              aria-label="Pregunta o pedido"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  send(question);
+                  submit(question);
                 }
               }}
               className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground"
             />
-            <Button type="submit" size="icon-sm" className="ai-cta size-9 rounded-xl" aria-label="Preguntar" loading={pending} disabled={question.trim().length < 3}>
-              {!pending && <ArrowUp />}
+            <Button type="submit" size="icon-sm" className="ai-cta size-9 rounded-xl" aria-label="Enviar" loading={working} disabled={question.trim().length < 2}>
+              {!working && <ArrowUp />}
             </Button>
           </div>
-          <AiNote className="mt-2 px-1">Las respuestas pueden tener errores. Nuestra IA lee las tarjetas solo cuando preguntás.</AiNote>
+          <AiNote className="mt-2 px-1">Actúa con tus permisos: si solo podés ver el tablero, solo responde. Las respuestas pueden tener errores.</AiNote>
         </form>
       </SheetContent>
     </Sheet>
