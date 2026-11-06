@@ -23,6 +23,10 @@ const schema = z
     SMTP_PASS: z.string().optional(),
     MAIL_FROM: z.string().default("Tableros <no-reply@localhost>"),
     VIRUSTOTAL_API_KEY: z.string().optional(),
+    // IA (opcional): sin clave, las funciones de IA responden "no configurada".
+    ANTHROPIC_API_KEY: z.string().min(20).optional(),
+    AI_MODEL: z.string().default("claude-opus-5-5"),
+    AI_MONTHLY_TOKENS: z.coerce.number().int().positive().default(2_000_000),
   })
   .superRefine((e, ctx) => {
     if (e.STORAGE_DRIVER === "supabase" && (!e.SUPABASE_URL || !e.SUPABASE_SERVICE_ROLE_KEY)) {

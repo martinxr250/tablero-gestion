@@ -17,6 +17,8 @@ import { mirrorRoutes } from "../modules/mirrors";
 import { deliveryRoutes } from "../modules/delivery";
 import { signalRoutes } from "../modules/signals";
 import { notificationSettingsRoutes } from "../modules/notification-settings";
+import { boardFileRoutes } from "../modules/board-files";
+import { aiRoutes } from "../modules/ai";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -36,6 +38,8 @@ const domainRoutes: RouteDef[] = [
   ...deliveryRoutes,
   ...signalRoutes,
   ...notificationSettingsRoutes,
+  ...boardFileRoutes,
+  ...aiRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

@@ -586,3 +586,30 @@ export const cardDeployments = app.table(
   },
   (t) => [primaryKey({ columns: [t.cardId, t.deploymentId] })],
 );
+
+export const boardFiles = app.table("board_files", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  boardId: uuid("board_id").notNull(),
+  uploaderId: uuid("uploader_id"),
+  storageKey: text("storage_key").notNull(),
+  fileName: text("file_name").notNull(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  aiSummary: text("ai_summary"),
+  aiSummaryAt: ts("ai_summary_at"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const aiUsage = app.table("ai_usage", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  userId: uuid("user_id"),
+  boardId: uuid("board_id"),
+  feature: text("feature").notNull(),
+  model: text("model").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});

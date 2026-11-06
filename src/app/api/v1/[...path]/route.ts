@@ -3,6 +3,8 @@ import { compiledRoutes } from "@/server/api";
 
 // Punto de entrada único de la API: autenticación, CSRF, rate limit y validación centralizados.
 export const dynamic = "force-dynamic";
+// Las funciones de IA leen documentos y pueden tardar más que una consulta común.
+export const maxDuration = 60;
 
 const handle = (req: Request) => dispatch(req, compiledRoutes);
 
