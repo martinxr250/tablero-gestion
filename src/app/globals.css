@@ -366,3 +366,14 @@
   .ai-shimmer, .ai-skeleton, .ai-pulse, .ai-reveal { animation: none !important; }
   .ai-shimmer { color: var(--muted-foreground); background-image: none; }
 }
+
+/* Menús nativos de <select>: el navegador dibuja las opciones con su propio fondo (blanco si el
+   select es semitransparente), así que se les fija el fondo y el texto del tema. */
+select option,
+select optgroup {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+}
+select option:disabled {
+  color: var(--muted-foreground);
+}
