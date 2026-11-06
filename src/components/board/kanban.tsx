@@ -5,7 +5,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  MouseSensor,
+  PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -16,6 +16,19 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+/**
+ * Mouse, trackpad y lápiz por eventos de puntero (funciona igual en Chrome, Safari, Firefox y Edge,
+ * también con pantallas táctiles). El dedo queda para TouchSensor, que pide mantener presionado.
+ */
+class MousePenSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: "onPointerDown" as const,
+      handler: ({ nativeEvent: e }: React.PointerEvent) => e.isPrimary && e.button === 0 && e.pointerType !== "touch",
+    },
+  ];
+}
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, GripVertical, MoreHorizontal, Palette, Pencil, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -86,7 +99,7 @@ export function Kanban({ data, canEdit, visible, filtering, highlight, onOpenCar
   const sensors = useSensors(
     // Mouse: arrastra al moverse 6 px. Táctil: mantener presionado un instante, así el dedo
     // puede desplazar el tablero sin agarrar tarjetas por accidente.
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MousePenSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -269,6 +282,9 @@ function ListColumn({
     onPointerDown: (e: React.PointerEvent) => {
       if (!fromControl(e.target)) listeners?.onPointerDown?.(e);
     },
+    onTouchStart: (e: React.TouchEvent) => {
+      if (!fromControl(e.target)) listeners?.onTouchStart?.(e);
+    },
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.target === e.currentTarget) listeners?.onKeyDown?.(e);
     },
@@ -297,7 +313,7 @@ function ListColumn({
       <header
         ref={dndEnabled ? setActivatorNodeRef : undefined}
         {...(dndEnabled ? { ...attributes, ...headerListeners, "aria-label": `Lista ${list.name}. Presioná Espacio para moverla.` } : {})}
-        className={cn("flex items-center gap-2 rounded-t-[2rem] px-4 pb-3 pt-4 outline-none focus-visible:ring-2 focus-visible:ring-ring", dndEnabled && "cursor-grab active:cursor-grabbing")}
+        className={cn("flex items-center gap-2 rounded-t-[2rem] px-4 pb-3 pt-4 outline-none focus-visible:ring-2 focus-visible:ring-ring", dndEnabled && "cursor-grab select-none active:cursor-grabbing")}
       >
         {dndEnabled && <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
         <span className={cn("size-2 shrink-0 rounded-full", SWATCH[asColor(list.color)])} aria-hidden />
@@ -436,7 +452,8 @@ function SortableCard({
         }
         listeners?.onKeyDown?.(e);
       }}
-      className={cn("cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring", hidden && "opacity-30")}
+      // Sin selección de texto: si no, el navegador empieza a seleccionar y le gana al arrastre.
+      className={cn("cursor-pointer rounded-2xl outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring", hidden && "opacity-30")}
     >
       <CardTile card={card} labels={labels} people={people} highlighted={highlighted} />
     </div>
