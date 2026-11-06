@@ -160,30 +160,3 @@ pnpm lint && pnpm typecheck && pnpm build
 ```
 
 Las capturas de este README se regeneran con `scripts/screenshots.mts`.
-
-## Desplegar gratis (Vercel + Supabase)
-
-1. **Supabase:** creá un proyecto y copiá la cadena del *pooler* en modo transacción (puerto 6543) como `DATABASE_URL` y la conexión directa (5432) como `MIGRATION_DATABASE_URL`.
-2. **Migraciones:** `MIGRATION_DATABASE_URL="postgres://…" pnpm db:migrate`. Las tablas quedan en el esquema `app`, que la API pública de Supabase no expone.
-3. **Archivos:** `SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… pnpm storage:setup` crea el bucket privado.
-4. **Claves:** `pnpm tsx scripts/setup-env.ts .env.production.local` genera un juego nuevo (no reutilices las de desarrollo).
-5. **Correo:** con Gmail, activá la verificación en dos pasos y usá una *contraseña de aplicación* en `SMTP_PASS`.
-6. **Vercel:** importá el repositorio y cargá las variables de [`.env.example`](.env.example) (`APP_URL` con `https://`, `STORAGE_DRIVER=supabase`, `MAIL_DRIVER=smtp`, `CRON_SECRET`). El cron diario de [`vercel.json`](vercel.json) envía los avisos de vencimiento y aplica la retención.
-
-> El plan Hobby de Vercel es para uso no comercial y un proyecto gratuito de Supabase se pausa tras 7 días sin actividad.
-
-## Estructura
-
-```
-db/migrations/        esquema, RLS y funciones SQL
-src/app/              pantallas (auth y app) y la ruta única de la API
-src/components/       interfaz (shell, tablero, tarjeta, miembros, ui de shadcn)
-src/server/           API: router, auth, módulos de dominio, correo y storage
-tests/                tests de integración y unitarios
-scripts/              migraciones, entorno, storage y capturas
-```
-
-## Limitaciones conocidas
-
-- La actualización en vivo es por sondeo cada 4 segundos (Vercel no mantiene WebSockets y se evita exponer claves en el navegador).
-- No hay escaneo antimalware completo de adjuntos; se mitiga validando el tipo real del archivo, limitando formatos y forzando la descarga.

@@ -19,6 +19,8 @@ import { signalRoutes } from "../modules/signals";
 import { notificationSettingsRoutes } from "../modules/notification-settings";
 import { boardFileRoutes } from "../modules/board-files";
 import { aiRoutes } from "../modules/ai";
+import { designRoutes } from "../modules/design";
+import { assistantRoutes } from "../modules/assistant";
 
 const domainRoutes: RouteDef[] = [
   ...authRoutes,
@@ -40,6 +42,8 @@ const domainRoutes: RouteDef[] = [
   ...notificationSettingsRoutes,
   ...boardFileRoutes,
   ...aiRoutes,
+  ...designRoutes,
+  ...assistantRoutes,
 ];
 
 export const allRoutes: RouteDef[] = [

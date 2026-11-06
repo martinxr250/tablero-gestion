@@ -224,7 +224,7 @@ export function FilesView({ boardId, canEdit, onGenerateTasks }: { boardId: stri
           ))}
         </ul>
       )}
-      {aiEnabled && <AiNote className="mt-6">Las funciones de IA envían el archivo elegido a Anthropic (Claude) para procesarlo, solo cuando lo pedís. Lee PDF, imágenes y texto.</AiNote>}
+      {aiEnabled && <AiNote className="mt-6">Nuestra IA lee el archivo elegido solo cuando se lo pedís (PDF, imágenes y texto).</AiNote>}
 
       {preview && (
         <Dialog open onOpenChange={(o) => !o && setPreview(null)} title={preview.fileName} wide>

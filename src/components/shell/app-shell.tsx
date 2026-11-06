@@ -6,7 +6,7 @@ import { PageTransition } from "./page-transition";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bell, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, ListTodo, LogOut, Menu as MenuIcon, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sun,
+  Bell, Blocks, Check, ChevronRight, ChevronsUpDown, LayoutDashboard, Sparkles, ListTodo, LogOut, Menu as MenuIcon, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sun,
   UserRound, X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -207,6 +207,8 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
         <NavLink href="/search" icon={Search} label="Búsqueda" mini={mini} active={pathname === "/search"} />
         <NavLink href="/work" icon={ListTodo} label="Mi trabajo" mini={mini} active={pathname === "/work"} />
         <NavLink href="/notifications" icon={Bell} label="Notificaciones" mini={mini} active={pathname === "/notifications"} />
+        <NavLink href="/assistant" icon={Sparkles} label="Asistente IA" mini={mini} active={pathname === "/assistant"} />
+        <NavLink href="/studio" icon={Blocks} label="Estudio" mini={mini} active={pathname.startsWith("/studio")} />
       </nav>
 
       <div className={cn("mx-5 my-4 border-t", mini && "md:mx-6")} />

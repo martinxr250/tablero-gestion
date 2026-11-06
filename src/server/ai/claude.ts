@@ -24,7 +24,12 @@ export function aiClient() {
 export const aiEnabled = () => !!env().ANTHROPIC_API_KEY;
 
 export type AiInput = Anthropic.Beta.BetaContentBlockParam;
-type Context = { orgId: string; userId: string; boardId?: string | null; feature: string };
+export type Context = {
+  orgId: string;
+  userId: string;
+  boardId?: string | null;
+  feature: string;
+};
 
 /** Tokens usados por la organización en el mes en curso. */
 export async function monthlyUsage(orgId: string) {
@@ -42,41 +47,86 @@ export async function monthlyUsage(orgId: string) {
  */
 export async function generate<T extends z.ZodType>(
   ctx: Context,
-  opts: { system: string; content: AiInput[]; schema: T; effort?: "medium"; maxTokens?: number },
+  opts: {
+    system: string;
+    content: AiInput[];
+    schema: T;
+    effort?: "medium";
+    maxTokens?: number;
+    timeoutMs?: number;
+  },
 ): Promise<z.infer<T>> {
-  const limit = env().AI_MONTHLY_TOKENS;
-  if ((await monthlyUsage(ctx.orgId)) >= limit) {
-    throw new AppError(429, "ai_quota_exceeded", "La organización alcanzó el límite mensual de uso de IA.");
-  }
+  await checkQuota(ctx.orgId);
   const model = env().AI_MODEL;
   let response;
   try {
-    response = await aiClient().beta.messages.parse({
-      model,
-      max_tokens: opts.maxTokens ?? 8000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      system: opts.system,
-      output_config: { effort: opts.effort ?? "medium", format: betaZodOutputFormat(opts.schema) },
-      messages: [{ role: "user", content: opts.content }],
-    });
+    response = await aiClient().beta.messages.parse(
+      {
+        model,
+        max_tokens: opts.maxTokens ?? 8000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        system: opts.system,
+        output_config: {
+          effort: opts.effort ?? "medium",
+          format: betaZodOutputFormat(opts.schema),
+        },
+        messages: [{ role: "user", content: opts.content }],
+      },
+      opts.timeoutMs ? { timeout: opts.timeoutMs, maxRetries: 1 } : undefined,
+    );
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) throw new AppError(429, "ai_busy", "La IA está ocupada. Probá de nuevo en un momento.");
-    if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-      logger.error("ai_auth_failed", { err });
-      throw new AppError(503, "ai_not_configured", "La clave de IA no es válida. Avisale a quien administra el sistema.");
-    }
-    if (err instanceof Anthropic.BadRequestError) {
-      logger.warn("ai_bad_request", { err });
-      throw new AppError(422, "ai_bad_input", "La IA no pudo procesar este contenido (puede ser un archivo dañado o demasiado grande).");
-    }
-    if (err instanceof Anthropic.APIError) {
-      logger.error("ai_api_error", { status: err.status, err });
-      throw new AppError(502, "ai_unavailable", "La IA no está disponible en este momento. Probá de nuevo más tarde.");
-    }
-    throw err;
+    throw aiError(err);
   }
+  await recordUsage(ctx, response);
 
+  if (response.stop_reason === "refusal") {
+    throw new AppError(422, "ai_refused", "La IA no puede ayudar con este contenido.");
+  }
+  if (response.stop_reason === "max_tokens" || !response.parsed_output) {
+    throw new AppError(502, "ai_incomplete", "La respuesta de la IA quedó incompleta. Probá con menos contenido.");
+  }
+  return response.parsed_output as z.infer<T>;
+}
+
+/** Corta antes de llamar a la API si la organización llegó a su tope mensual. */
+export async function checkQuota(orgId: string) {
+  if ((await monthlyUsage(orgId)) >= env().AI_MONTHLY_TOKENS) {
+    throw new AppError(429, "ai_quota_exceeded", "La organización alcanzó el límite mensual de uso de IA.");
+  }
+}
+
+/** Traduce errores del SDK a errores de la app (sin filtrar detalles internos ni la clave). */
+export function aiError(err: unknown): unknown {
+  if (err instanceof Anthropic.RateLimitError) return new AppError(429, "ai_busy", "La IA está ocupada. Probá de nuevo en un momento.");
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    logger.error("ai_auth_failed", { err });
+    return new AppError(503, "ai_not_configured", "La clave de IA no es válida. Avisale a quien administra el sistema.");
+  }
+  if (err instanceof Anthropic.BadRequestError) {
+    logger.warn("ai_bad_request", { err });
+    return new AppError(422, "ai_bad_input", "La IA no pudo procesar este contenido (puede ser un archivo dañado o demasiado grande).");
+  }
+  if (err instanceof Anthropic.APIError) {
+    logger.error("ai_api_error", { status: err.status, err });
+    return new AppError(502, "ai_unavailable", "La IA no está disponible en este momento. Probá de nuevo más tarde.");
+  }
+  return err;
+}
+
+/** Registra el consumo de una respuesta (tokens de entrada, incluida la caché, y de salida). */
+export async function recordUsage(
+  ctx: Context,
+  response: {
+    model: string;
+    usage: {
+      input_tokens?: number | null;
+      output_tokens?: number | null;
+      cache_read_input_tokens?: number | null;
+      cache_creation_input_tokens?: number | null;
+    };
+  },
+) {
   await withSystem((tx) =>
     tx.insert(aiUsage).values({
       id: uuidv7(),
@@ -89,12 +139,4 @@ export async function generate<T extends z.ZodType>(
       outputTokens: response.usage.output_tokens ?? 0,
     }),
   );
-
-  if (response.stop_reason === "refusal") {
-    throw new AppError(422, "ai_refused", "La IA no puede ayudar con este contenido.");
-  }
-  if (response.stop_reason === "max_tokens" || !response.parsed_output) {
-    throw new AppError(502, "ai_incomplete", "La respuesta de la IA quedó incompleta. Probá con menos contenido.");
-  }
-  return response.parsed_output as z.infer<T>;
 }

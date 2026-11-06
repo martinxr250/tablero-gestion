@@ -18,7 +18,7 @@ export function AiMark({ size = "md", pulse, className }: { size?: "sm" | "md" |
   );
 }
 
-/** Espera mientras Claude trabaja: mensajes que avanzan y renglones de muestra. */
+/** Espera mientras la IA trabaja: mensajes que avanzan y renglones de muestra. */
 export function AiThinking({ steps, lines = 3, compact, className }: { steps: string[]; lines?: number; compact?: boolean; className?: string }) {
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -47,13 +47,14 @@ export function AiThinking({ steps, lines = 3, compact, className }: { steps: st
 
 const FRIENDLY: Record<string, { title: string; hint?: string }> = {
   ai_quota_exceeded: { title: "Se alcanzó el tope de IA del mes", hint: "La organización usó todo su cupo mensual. Se renueva el mes que viene." },
-  ai_busy: { title: "Claude está con mucha demanda", hint: "Probá de nuevo en unos segundos." },
-  ai_refused: { title: "Claude no pudo responder este pedido", hint: "Probá reformularlo o usar otro material." },
+  ai_busy: { title: "Nuestra IA está con mucha demanda", hint: "Probá de nuevo en unos segundos." },
+  ai_refused: { title: "Nuestra IA no pudo responder este pedido", hint: "Probá reformularlo o usar otro material." },
   ai_not_configured: { title: "La IA no está disponible", hint: "Falta configurarla en el servidor." },
   ai_unavailable: { title: "La IA no está disponible", hint: "Probá de nuevo en unos minutos." },
   ai_auth_failed: { title: "La IA no está disponible", hint: "Hay que revisar la configuración del servidor." },
   ai_incomplete: { title: "La respuesta quedó incompleta", hint: "Probá de nuevo; si el material es muy largo, usá uno más corto." },
-  ai_bad_input: { title: "Claude no pudo leer el material", hint: "Revisá que el archivo no esté dañado o protegido con contraseña." },
+  ai_bad_input: { title: "Nuestra IA no pudo leer el material", hint: "Revisá que el archivo no esté dañado o protegido con contraseña." },
+  assistant_busy: { title: "El asistente sigue trabajando", hint: "Esperá a que termine la respuesta anterior." },
   rate_limited: { title: "Llegaste al límite de pedidos de IA por hora", hint: "Esperá un rato y volvé a intentar." },
 };
 

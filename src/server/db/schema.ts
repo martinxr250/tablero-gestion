@@ -613,3 +613,44 @@ export const aiUsage = app.table("ai_usage", {
   outputTokens: integer("output_tokens").notNull().default(0),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+export type DesignDocKind = "vision" | "requirements" | "use_cases" | "flow" | "sequence" | "data_model" | "architecture" | "plan" | "note";
+
+export const designProjects = app.table("design_projects", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
+  boardId: uuid("board_id"),
+  name: text("name").notNull(),
+  brief: text("brief").notNull().default(""),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+export const designDocs = app.table("design_docs", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  projectId: uuid("project_id").notNull(),
+  kind: text("kind").$type<DesignDocKind>().notNull(),
+  title: text("title").notNull(),
+  content: jsonb("content").$type<Record<string, unknown>>().notNull().default({}),
+  source: text("source").notNull().default(""),
+  position: integer("position").notNull().default(0),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
+  updatedBy: uuid("updated_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+export const aiConversations = app.table("ai_conversations", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  title: text("title").notNull().default("Conversación"),
+  messages: jsonb("messages").$type<unknown[]>().notNull().default([]),
+  pending: jsonb("pending").$type<unknown>(),
+  lockedUntil: ts("locked_until"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});

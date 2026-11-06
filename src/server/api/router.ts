@@ -354,3 +354,57 @@ export function buildOpenApi(routes: RouteDef[]) {
     paths,
   };
 }
+
+/**
+ * Ejecuta una ruta de la API en nombre de una persona, sin pasar por HTTP: mismas validaciones,
+ * permisos, registros de actividad y auditoría que si lo hiciera desde la app. Lo usan el asistente
+ * IA y el estudio de diseño para actuar con los permisos de quien lo pide.
+ */
+export async function invokeAs(
+  compiled: Compiled[],
+  user: SessionUser,
+  audit: AuditContext,
+  method: Method,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; data: unknown }> {
+  const url = new URL(path, "http://interno");
+  let match: { c: Compiled; m: RegExpExecArray } | undefined;
+  for (const c of compiled) {
+    const m = c.regex.exec(url.pathname);
+    if (m && c.def.method === method) {
+      match = { c, m };
+      break;
+    }
+  }
+  if (!match || match.c.def.auth !== "user" || match.c.def.multipart || match.c.def.rawBody) throw notFound("Acción");
+  const { def, keys } = match.c;
+  const params: Record<string, string> = {};
+  keys.forEach((k, i) => {
+    const value = decodeURIComponent(match.m[i + 1] ?? "");
+    if ((k === "id" || k.endsWith("Id")) && !UUID_RE.test(value)) throw notFound();
+    params[k] = value;
+  });
+  for (const rule of def.rateLimit ?? []) await rateLimit(`${rule.name}:user:${user.id}`, rule.limit, rule.windowSec);
+  const parsedBody = def.body ? def.body.parse(body ?? {}) : undefined;
+  const query = def.query ? def.query.parse(parseQuery(url)) : undefined;
+  const ctx: RouteContext<unknown, unknown> = {
+    req: new Request(url),
+    params,
+    body: parsedBody,
+    query,
+    form: null,
+    rawBody: null,
+    user,
+    me: user,
+    ip: "interno",
+    ipHash: audit.ipHash ?? "",
+    userAgent: audit.userAgent ?? "",
+    requestId: uuidv7(),
+    audit,
+    setCookies: [],
+  };
+  const result = await def.handler(ctx);
+  if (result instanceof Response) return { status: result.status, data: null };
+  return { status: result === undefined ? 204 : (def.status ?? 200), data: result ?? null };
+}

@@ -32,7 +32,7 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
   const ask = useMutation({
     mutationKey: ["ai-ask", boardId],
     mutationFn: (q: string) => api<{ answer: string; cards: { id: string; title: string }[] }>(`/boards/${boardId}/ai/ask`, { method: "POST", body: { question: q } }),
-    // Se guarda aunque el panel se haya cerrado mientras Claude respondía.
+    // Se guarda aunque el panel se haya cerrado mientras la IA respondía.
     onSuccess: (r, q) => askHistory.add(boardId, { question: q, ...r, at: new Date().toISOString() }),
   });
   // Si se cerró y se volvió a abrir mientras respondía, se sigue mostrando la espera.
@@ -186,7 +186,7 @@ export function AskBoard({ boardId, onOpenCard, onClose }: { boardId: string; on
               {!pending && <ArrowUp />}
             </Button>
           </div>
-          <AiNote className="mt-2 px-1">Las respuestas pueden tener errores. Las tarjetas se envían a Anthropic solo cuando preguntás.</AiNote>
+          <AiNote className="mt-2 px-1">Las respuestas pueden tener errores. Nuestra IA lee las tarjetas solo cuando preguntás.</AiNote>
         </form>
       </SheetContent>
     </Sheet>

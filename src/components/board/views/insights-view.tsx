@@ -521,7 +521,7 @@ function AiBriefing({ boardId }: { boardId: string }) {
         </Button>
       </div>
       {!b && !run.isPending && !run.error && (
-        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Claude redacta el estado del tablero a partir de los indicadores de este panel: qué importa, qué riesgos hay y qué conviene hacer. No lee descripciones ni comentarios, y no inventa datos.</p>
+        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Nuestra IA redacta el estado del tablero a partir de los indicadores de este panel: qué importa, qué riesgos hay y qué conviene hacer. No lee descripciones ni comentarios, y no inventa datos.</p>
       )}
       {run.isPending && <AiThinking className="mt-5" steps={["Leyendo los indicadores del panel…", "Buscando riesgos y avances…", "Redactando el resumen…"]} lines={3} />}
       {run.error && !run.isPending && <AiError className="mt-4" error={run.error} retry={() => run.mutate()} />}

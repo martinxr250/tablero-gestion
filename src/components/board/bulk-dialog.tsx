@@ -214,7 +214,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
                   <p className="text-sm font-semibold">
                     Generar tareas con <span className="ai-text">IA</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">Claude lee un PDF, una imagen (por ejemplo, la foto de un pizarrón) o el texto de arriba y propone tareas con responsables, fechas y subtareas. Nada se crea hasta que revises y confirmes.</p>
+                  <p className="text-xs text-muted-foreground">Nuestra IA lee un PDF, una imagen (por ejemplo, la foto de un pizarrón) o el texto de arriba y propone tareas con responsables, fechas y subtareas. Nada se crea hasta que revises y confirmes.</p>
                 </div>
               </div>
               {generate.isPending || uploadForAi.isPending ? (
