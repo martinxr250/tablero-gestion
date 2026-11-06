@@ -37,12 +37,12 @@ export async function monthlyUsage(orgId: string) {
 }
 
 /**
- * Pide a Claude una respuesta con forma fija (esquema Zod). Effort bajo por defecto: son
- * tareas de extracción y resumen, donde más razonamiento no mejora el resultado.
+ * Pide a Claude una respuesta con forma fija (esquema Zod). Modelo por defecto: Claude
+ * Sonnet 5.5 con effort medio (equilibrio entre calidad, velocidad y costo).
  */
 export async function generate<T extends z.ZodType>(
   ctx: Context,
-  opts: { system: string; content: AiInput[]; schema: T; effort?: "low" | "medium" | "high"; maxTokens?: number },
+  opts: { system: string; content: AiInput[]; schema: T; effort?: "medium"; maxTokens?: number },
 ): Promise<z.infer<T>> {
   const limit = env().AI_MONTHLY_TOKENS;
   if ((await monthlyUsage(ctx.orgId)) >= limit) {
@@ -57,7 +57,7 @@ export async function generate<T extends z.ZodType>(
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       system: opts.system,
-      output_config: { effort: opts.effort ?? "low", format: betaZodOutputFormat(opts.schema) },
+      output_config: { effort: opts.effort ?? "medium", format: betaZodOutputFormat(opts.schema) },
       messages: [{ role: "user", content: opts.content }],
     });
   } catch (err) {

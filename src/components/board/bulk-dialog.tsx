@@ -1,11 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CornerDownRight, FileSpreadsheet, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { CornerDownRight, FileSpreadsheet, Sparkles, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/overlay";
-import { Alert, Button, Textarea } from "@/components/ui/primitives";
+import { Alert, Button, Select, Spinner, Textarea } from "@/components/ui/primitives";
+import { aiTasksToRows, useAiEnabled, type AiTask } from "@/lib/ai";
 import { api, ApiError } from "@/lib/api";
 import { parseCsv, parsePasted, parseRows, type Cell, type DraftRow } from "@/lib/bulk-parse";
 import type { BoardData } from "@/lib/types";
@@ -17,8 +18,44 @@ const MAX_ROWS = 200;
 type Result = { index: number; cardId: string; issueNumber?: number; error?: string };
 
 /** Carga masiva: pegar una lista o importar CSV/Excel, revisar en una tabla editable y crear todo junto. */
-export function BulkDialog({ data, open, onOpenChange }: { data: BoardData; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: BoardData; open: boolean; onOpenChange: (o: boolean) => void; aiFileId?: string | null }) {
   const qc = useQueryClient();
+  const aiEnabled = useAiEnabled();
+  const aiFile = useRef<HTMLInputElement>(null);
+  const files = useQuery({
+    queryKey: ["board-files", data.board.id],
+    queryFn: () => api<{ files: { id: string; fileName: string; aiReadable: boolean }[] }>(`/boards/${data.board.id}/files`),
+    enabled: open && aiEnabled,
+  });
+  const [aiPick, setAiPick] = useState("");
+  const generate = useMutation({
+    mutationFn: (body: { fileId?: string; text?: string }) => api<{ tasks: AiTask[] }>(`/boards/${data.board.id}/ai/tasks`, { method: "POST", body }),
+    onSuccess: (r) => {
+      if (r.tasks.length === 0) return toast.info("La IA no encontró tareas en ese material");
+      load(aiTasksToRows(r.tasks));
+      toast.success(`La IA propuso ${r.tasks.length} tareas. Revisalas antes de crearlas.`);
+    },
+  });
+  const uploadForAi = useMutation({
+    mutationFn: (f: File) => {
+      const form = new FormData();
+      form.set("file", f);
+      return api<{ id: string; aiReadable: boolean }>(`/boards/${data.board.id}/files`, { method: "POST", form });
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["board-files", data.board.id] });
+      if (!r.aiReadable) return toast.error("Se guardó en Archivos, pero la IA solo lee PDF, imágenes y texto.");
+      generate.mutate({ fileId: r.id });
+    },
+  });
+  // Abierto desde la vista Archivos con un documento elegido: genera al abrir (una sola vez).
+  const autoRan = useRef<string | null>(null);
+  const { mutate: runGenerate } = generate;
+  useEffect(() => {
+    if (!open || !aiFileId || autoRan.current === aiFileId) return;
+    autoRan.current = aiFileId;
+    runGenerate({ fileId: aiFileId });
+  }, [open, aiFileId, runGenerate]);
   const file = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [rows, setRows] = useState<DraftRow[] | null>(null);
@@ -168,6 +205,55 @@ export function BulkDialog({ data, open, onOpenChange }: { data: BoardData; open
               }}
             />
           </div>
+          {aiEnabled && (
+            <section className="space-y-3 rounded-2xl border border-primary/30 bg-primary-soft/40 p-4" aria-label="Generar con IA">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="size-4 text-primary" /> Generar tareas con IA
+              </p>
+              <p className="text-xs text-muted-foreground">Claude lee un PDF, una imagen (por ejemplo, la foto de un pizarrón) o el texto de arriba y propone tareas. Nada se crea hasta que revises y confirmes.</p>
+              {generate.isPending || uploadForAi.isPending ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                  <Spinner className="size-4" /> {uploadForAi.isPending ? "Subiendo el archivo…" : "Leyendo el material y armando las tareas…"}
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  {!!files.data?.files.some((f) => f.aiReadable) && (
+                    <>
+                      <Select aria-label="Archivo del tablero" className="h-9 w-auto max-w-64" value={aiPick} onChange={(e) => setAiPick(e.target.value)}>
+                        <option value="">Elegí un archivo del tablero…</option>
+                        {files.data.files.filter((f) => f.aiReadable).map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.fileName}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button size="sm" disabled={!aiPick} onClick={() => generate.mutate({ fileId: aiPick })}>
+                        <Sparkles /> Generar
+                      </Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => aiFile.current?.click()}>
+                    <Upload /> Subir PDF o imagen
+                  </Button>
+                  <Button size="sm" variant="secondary" disabled={!text.trim()} onClick={() => generate.mutate({ text })}>
+                    Usar el texto pegado
+                  </Button>
+                  <input
+                    ref={aiFile}
+                    type="file"
+                    hidden
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadForAi.mutate(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              )}
+              {generate.error && <Alert>{generate.error instanceof ApiError ? generate.error.message : "No se pudo generar con IA."}</Alert>}
+            </section>
+          )}
           <div className="flex gap-3 rounded-2xl bg-muted p-4 text-xs text-muted-foreground">
             <FileSpreadsheet className="size-5 shrink-0" />
             <p>

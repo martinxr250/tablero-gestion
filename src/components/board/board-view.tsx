@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity as ActivityIcon, Archive, CalendarDays, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Copy, FileDown, Filter, Gauge, LayoutGrid, List as ListIcon, ListPlus, Milestone, Flame, GitBranch, Lock, MoreHorizontal, Plus, RefreshCw, RotateCcw, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, Archive, CalendarDays, CheckCircle2, ChevronsDownUp, ChevronsUpDown, Copy, FileDown, Filter, Gauge, LayoutGrid, List as ListIcon, ListPlus, Milestone, Flame, GitBranch, Lock, MoreHorizontal, Paperclip, Plus, RefreshCw, RotateCcw, Settings, Sparkles, SquareKanban, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, ViewTransition } from "react";
@@ -19,9 +19,12 @@ import type { Activity, BoardData, CardSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BoardSettingsDialog } from "./board-settings";
 import { CardModal } from "./card-modal";
+import { useAiEnabled } from "@/lib/ai";
+import { AskBoard } from "./ask-board";
 import { BulkDialog } from "./bulk-dialog";
 import { Kanban } from "./kanban";
 import { CalendarView } from "./views/calendar-view";
+import { FilesView } from "./views/files-view";
 import { InsightsView } from "./views/insights-view";
 import { ListView } from "./views/list-view";
 import { SprintsView } from "./views/sprints-view";
@@ -54,13 +57,14 @@ function setCompactHeader(value: boolean) {
   window.dispatchEvent(new Event(HEADER_EVENT));
 }
 
-type ViewKey = "board" | "list" | "calendar" | "sprints" | "insights";
+type ViewKey = "board" | "list" | "calendar" | "sprints" | "insights" | "files";
 const VIEWS: { key: ViewKey; label: string; icon: typeof LayoutGrid }[] = [
   { key: "board", label: "Tablero", icon: LayoutGrid },
   { key: "list", label: "Lista", icon: ListIcon },
   { key: "calendar", label: "Calendario", icon: CalendarDays },
   { key: "sprints", label: "Etapas", icon: Milestone },
   { key: "insights", label: "Panel del líder", icon: Gauge },
+  { key: "files", label: "Archivos", icon: Paperclip },
 ];
 
 function DuplicateBoardDialog({ data, onClose }: { data: BoardData; onClose: () => void }) {
@@ -152,7 +156,9 @@ export function BoardView({ boardId }: { boardId: string }) {
   };
   const compactHeader = useSyncExternalStore(subscribeHeader, readHeaderCompact, () => true);
   const [highlight, setHighlight] = useState<Set<string>>(new Set());
-  const [panel, setPanel] = useState<"settings" | "archived" | "activity" | "bulk" | "duplicate" | null>(null);
+  const [panel, setPanel] = useState<"settings" | "archived" | "activity" | "bulk" | "duplicate" | "ask" | null>(null);
+  const aiEnabled = useAiEnabled();
+  const [bulkAiFile, setBulkAiFile] = useState<string | null>(null);
   const view = (VIEWS.some((v) => v.key === params.get("view")) ? params.get("view") : "board") as ViewKey;
   const cursor = useRef<number | null>(null);
 
@@ -267,6 +273,11 @@ export function BoardView({ boardId }: { boardId: string }) {
           <AvatarStack users={data.people} max={3} size={36} />
           <div className="flex flex-wrap items-center gap-2">
             <FiltersButton data={data} filters={filters} setFilters={setFilters} />
+            {aiEnabled && (
+              <Button variant="secondary" size="sm" onClick={() => setPanel("ask")} title="Preguntale al tablero con IA">
+                <Sparkles /> <span className="hidden sm:inline">Preguntar</span>
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => setPanel("activity")}>
               <ActivityIcon /> <span className="hidden sm:inline">Actividad</span>
             </Button>
@@ -416,11 +427,30 @@ export function BoardView({ boardId }: { boardId: string }) {
           {view === "list" && <ListView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
           {view === "calendar" && <CalendarView data={data} visible={visible} onOpenCard={(id) => openCard(id)} />}
           {view === "sprints" && <SprintsView data={data} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
-          {view === "insights" && <InsightsView boardId={data.board.id} canManage={data.role === "admin"} onOpenCard={(id) => openCard(id)} />}
+          {view === "insights" && <InsightsView boardId={data.board.id} canManage={data.role === "admin"} canEdit={canEdit} onOpenCard={(id) => openCard(id)} />}
+          {view === "files" && (
+            <FilesView
+              boardId={data.board.id}
+              canEdit={canEdit}
+              onGenerateTasks={(fileId) => {
+                setBulkAiFile(fileId);
+                setPanel("bulk");
+              }}
+            />
+          )}
         </div>
       </ViewTransition>
-      <BulkDialog data={data} open={panel === "bulk"} onOpenChange={(o) => setPanel(o ? "bulk" : null)} />
+      <BulkDialog
+        data={data}
+        open={panel === "bulk"}
+        aiFileId={bulkAiFile}
+        onOpenChange={(o) => {
+          setPanel(o ? "bulk" : null);
+          if (!o) setBulkAiFile(null);
+        }}
+      />
       {panel === "duplicate" && <DuplicateBoardDialog data={data} onClose={() => setPanel(null)} />}
+      {panel === "ask" && <AskBoard boardId={data.board.id} onOpenCard={(id) => openCard(id)} onClose={() => setPanel(null)} />}
       {openCardId && <CardModal key={openCardId} cardId={openCardId} board={data} onClose={() => openCard(null)} onOpenCard={(id) => openCard(id)} />}
       {panel === "settings" && <BoardSettingsDialog data={data} onClose={() => setPanel(null)} />}
       {panel === "archived" && <ArchivedDialog data={data} canEdit={canEdit} onOpenCard={openCard} onClose={() => setPanel(null)} />}

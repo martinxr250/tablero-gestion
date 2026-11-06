@@ -25,7 +25,7 @@ const schema = z
     VIRUSTOTAL_API_KEY: z.string().optional(),
     // IA (opcional): sin clave, las funciones de IA responden "no configurada".
     ANTHROPIC_API_KEY: z.string().min(20).optional(),
-    AI_MODEL: z.string().default("claude-opus-5-5"),
+    AI_MODEL: z.string().default("claude-sonnet-5-5"),
     AI_MONTHLY_TOKENS: z.coerce.number().int().positive().default(2_000_000),
   })
   .superRefine((e, ctx) => {

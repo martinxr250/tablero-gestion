@@ -82,9 +82,9 @@ describe("archivos del tablero e IA", () => {
     const r = await lead.post(`/boards/${s.boardId}/ai/tasks`, { fileId });
     expect(r.status).toBe(200);
     const req = sent.at(-1)!.body;
-    expect(req.model).toBe("claude-opus-5-5");
+    expect(req.model).toBe("claude-sonnet-5-5");
     expect(req.fallbacks).toBe("default");
-    expect(req.output_config.effort).toBe("low");
+    expect(req.output_config.effort).toBe("medium");
     expect(req.system).toContain("ignoralas");
     expect(req.messages[0].content[0]).toMatchObject({ type: "document", source: { type: "base64", media_type: "application/pdf" } });
     // Fecha y estimación inválidas y responsables inexistentes se descartan.
@@ -114,7 +114,11 @@ describe("archivos del tablero e IA", () => {
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ summary: "Hay que terminar el login.", subtasks: ["Pruebas"], checklist: ["Probar en celular"], filesRead: 1 });
     expect(sent.at(-1)!.body.messages[0].content[0].type).toBe("document");
-    expect((await viewer.post(`/cards/${s.cardId}/ai/assist`)).status).toBe(403);
+    // Quien solo ve recibe la explicación y los riesgos, sin sugerencias para aplicar.
+    nextReply = { summary: "Explicación", subtasks: ["X"], checklist: ["Y"], risks: ["Z"] };
+    const v = await viewer.post(`/cards/${s.cardId}/ai/assist`);
+    expect(v.status).toBe(200);
+    expect(v.body).toMatchObject({ summary: "Explicación", canApply: false, subtasks: [], checklist: [], risks: ["Z"] });
   });
 
   it("resumen de archivo: queda guardado para todos", async () => {
@@ -131,6 +135,18 @@ describe("archivos del tablero e IA", () => {
     expect(r.status).toBe(200);
     expect(r.body.headline).toBe("Todo en marcha");
     expect(JSON.stringify(sent.at(-1)!.body)).not.toContain("SECRETO-INTERNO");
+  });
+
+  it("preguntale al tablero: disponible para quien solo ve, con tarjetas válidas y solo datos del tablero", async () => {
+    nextReply = { answer: "Hay una tarea vencida.", cards: [1, 999, 1] };
+    const r = await viewer.post(`/boards/${s.boardId}/ai/ask`, { question: "¿Qué está vencido?" });
+    expect(r.status).toBe(200);
+    expect(r.body.answer).toBe("Hay una tarea vencida.");
+    expect(r.body.cards).toHaveLength(1); // números inexistentes o repetidos se descartan
+    expect(typeof r.body.cards[0].id).toBe("string");
+    const req = sent.at(-1)!.body;
+    expect(req.messages[0].content.at(-1).text).toContain("¿Qué está vencido?");
+    expect((await viewer.post(`/boards/${s.boardId}/ai/ask`, { question: "?" })).status).toBe(400);
   });
 
   it("si la IA rechaza el pedido, responde un error claro", async () => {
@@ -161,6 +177,7 @@ describe("archivos del tablero e IA", () => {
       await intruder.post(`/board-files/${fileId}/ai/summary`),
       await intruder.post(`/boards/${s.boardId}/ai/tasks`, { fileId }),
       await intruder.post(`/cards/${s.cardId}/ai/assist`),
+      await intruder.post(`/boards/${s.boardId}/ai/ask`, { question: "¿Qué hay acá?" }),
     ]) {
       expect(r.status).toBe(404);
       expect(r.text).not.toContain("sk-ant");

@@ -1,16 +1,17 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Ban, Bell, BellOff, CheckCircle2, Copy, Layers, ListChecks, XCircle, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
+import { AlertTriangle, Ban, Bell, BellOff, CheckCircle2, Copy, Layers, ListChecks, XCircle, Sparkles, CornerUpLeft, Gauge, ListTree, Milestone, Plus, Repeat, ShieldCheck, Square, X } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
+import { Dialog, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/overlay";
 import { Avatar } from "@/components/ui/user-avatar";
-import { Button, Input, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Input, Select, Textarea , Spinner } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import type { BoardData, CardDetail, WorkspaceTree } from "@/lib/types";
+import { useAiEnabled } from "@/lib/ai";
 import { parsePoints } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
@@ -227,6 +228,7 @@ export function PlanningSidebar({ card, board, canEdit, patch, onOpenCard }: { c
     },
   });
   const sprints = board.sprints.filter((s) => s.status !== "closed" || s.id === card.sprintId);
+  const aiEnabled = useAiEnabled();
   return (
     <>
       <div className="space-y-1.5">
@@ -295,6 +297,10 @@ export function PlanningSidebar({ card, board, canEdit, patch, onOpenCard }: { c
         </Button>
       )}
       <MirrorControls card={card} board={board} />
+      {aiEnabled && <CardAiAssist card={card} refresh={() => {
+        qc.invalidateQueries({ queryKey: ["card", card.id] });
+        qc.invalidateQueries({ queryKey: ["board"] });
+      }} />}
     </>
   );
 }
@@ -421,5 +427,132 @@ export function CompletionPanel({ card }: { card: CardDetail }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+type Assist = { summary: string; canApply: boolean; subtasks: string[]; checklist: string[]; risks: string[]; filesRead: number };
+
+/** Asistente con IA: resume la tarjeta (con sus PDF e imágenes) y propone subtareas y checklist. */
+export function CardAiAssist({ card, refresh }: { card: CardDetail; refresh: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pickSub, setPickSub] = useState<Set<number>>(new Set());
+  const [pickChk, setPickChk] = useState<Set<number>>(new Set());
+  const run = useMutation({
+    mutationFn: () => api<Assist>(`/cards/${card.id}/ai/assist`, { method: "POST" }),
+    onSuccess: (r) => {
+      setPickSub(new Set(r.subtasks.map((_, i) => i)));
+      setPickChk(new Set(r.checklist.map((_, i) => i)));
+    },
+  });
+  const apply = useMutation({
+    mutationFn: async (kind: "subtasks" | "checklist") => {
+      const r = run.data!;
+      if (kind === "subtasks") {
+        for (const [i, title] of r.subtasks.entries()) if (pickSub.has(i)) await api(`/cards/${card.id}/subtasks`, { method: "POST", body: { title } });
+        return pickSub.size;
+      }
+      const { id } = await api<{ id: string }>(`/cards/${card.id}/checklists`, { method: "POST", body: { title: "Sugerencias de IA" } });
+      for (const [i, text] of r.checklist.entries()) if (pickChk.has(i)) await api(`/checklists/${id}/items`, { method: "POST", body: { text } });
+      return pickChk.size;
+    },
+    onSuccess: (n, kind) => toast.success(kind === "subtasks" ? `${n} subtareas agregadas` : `Checklist con ${n} ítems agregada`),
+    onSettled: refresh,
+  });
+  const toggle = (set: Set<number>, i: number, update: (s: Set<number>) => void) => {
+    const next = new Set(set);
+    if (next.has(i)) next.delete(i);
+    else next.add(i);
+    update(next);
+  };
+  const r = run.data;
+  return (
+    <>
+      <Button
+        variant="secondary"
+        className="w-full justify-start"
+        onClick={() => {
+          setOpen(true);
+          if (!run.data && !run.isPending) run.mutate();
+        }}
+      >
+        <Sparkles /> Explicar con IA
+      </Button>
+      {open && (
+        <Dialog open onOpenChange={setOpen} title="Asistente IA" description="Claude lee la tarjeta, sus comentarios y hasta 3 adjuntos (PDF, imágenes o texto). Si podés editar, también sugiere subtareas y checklist para que elijas cuáles agregar." wide>
+          {run.isPending ? (
+            <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
+              <Spinner className="size-4" /> Leyendo la tarjeta…
+            </p>
+          ) : run.error ? (
+            <div className="space-y-3">
+              <p className="text-sm text-destructive">{(run.error as Error).message}</p>
+              <Button size="sm" variant="secondary" onClick={() => run.mutate()}>
+                Reintentar
+              </Button>
+            </div>
+          ) : r ? (
+            <div className="space-y-5">
+              <section>
+                <h3 className="mb-1 text-sm font-semibold">Resumen</h3>
+                <p className="text-sm leading-relaxed whitespace-pre-line">{r.summary}</p>
+                {r.filesRead > 0 && <p className="mt-1 text-xs text-muted-foreground">Leyó {r.filesRead} adjunto(s).</p>}
+              </section>
+              {r.subtasks.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold">Subtareas sugeridas</h3>
+                  <ul className="space-y-1.5">
+                    {r.subtasks.map((t, i) => (
+                      <li key={i}>
+                        <label className="flex items-start gap-2 text-sm">
+                          <input type="checkbox" className="mt-0.5 size-4 accent-[var(--primary)]" checked={pickSub.has(i)} onChange={() => toggle(pickSub, i, setPickSub)} />
+                          {t}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button size="sm" className="mt-2" disabled={pickSub.size === 0} loading={apply.isPending && apply.variables === "subtasks"} onClick={() => apply.mutate("subtasks")}>
+                    Agregar {pickSub.size} subtarea(s)
+                  </Button>
+                </section>
+              )}
+              {r.checklist.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold">Checklist sugerida</h3>
+                  <ul className="space-y-1.5">
+                    {r.checklist.map((t, i) => (
+                      <li key={i}>
+                        <label className="flex items-start gap-2 text-sm">
+                          <input type="checkbox" className="mt-0.5 size-4 accent-[var(--primary)]" checked={pickChk.has(i)} onChange={() => toggle(pickChk, i, setPickChk)} />
+                          {t}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button size="sm" className="mt-2" disabled={pickChk.size === 0} loading={apply.isPending && apply.variables === "checklist"} onClick={() => apply.mutate("checklist")}>
+                    Agregar como checklist
+                  </Button>
+                </section>
+              )}
+              {r.risks.length > 0 && (
+                <section>
+                  <h3 className="mb-1 text-sm font-semibold">Riesgos</h3>
+                  <ul className="list-disc space-y-1 pl-5 text-sm">
+                    {r.risks.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <div className="flex items-center justify-between border-t pt-3">
+                <p className="text-xs text-muted-foreground">Sugerencias de IA: pueden tener errores.</p>
+                <Button size="sm" variant="ghost" onClick={() => run.mutate()}>
+                  Generar de nuevo
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </Dialog>
+      )}
+    </>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CircleCheck, CircleX, Clock, GitPullRequest, Loader, ShieldCheck } from "lucide-react";
-import { Button, ErrorState, Skeleton } from "@/components/ui/primitives";
+import { Ban, CircleCheck, Sparkles, CircleX, Clock, GitPullRequest, Loader, ShieldCheck } from "lucide-react";
+import { Button, ErrorState, Skeleton, Spinner } from "@/components/ui/primitives";
+import { useAiEnabled } from "@/lib/ai";
 import { Avatar } from "@/components/ui/user-avatar";
 import { api } from "@/lib/api";
 import { ago, fmtShort } from "@/lib/format";
@@ -85,7 +86,7 @@ function Kpi({ label, value, unit, tone }: { label: string; value: string | numb
 }
 
 /** Panel del líder: carga por persona, revisiones de código, bloqueos, calidad y tiempos. */
-export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: string; canManage: boolean; onOpenCard: (id: string) => void }) {
+export function InsightsView({ boardId, canManage, canEdit, onOpenCard }: { boardId: string; canManage: boolean; canEdit: boolean; onOpenCard: (id: string) => void }) {
   const q = useQuery({ queryKey: ["insights", boardId], queryFn: () => api<Insights>(`/boards/${boardId}/insights`), refetchInterval: 60_000 });
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   if (!q.data) return <Skeleton className="mx-6 h-96" />;
@@ -105,6 +106,8 @@ export function InsightsView({ boardId, canManage, onOpenCard }: { boardId: stri
         <Kpi label="Revisiones de código abiertas" value={d.summary.openReviews} />
         <Kpi label="Etapas en riesgo" value={d.summary.sprintsAtRisk} tone={d.summary.sprintsAtRisk ? "text-brand" : undefined} />
       </div>
+
+      {canEdit && <AiBriefing boardId={boardId} />}
 
       <section className="mb-6 rounded-[2rem] border bg-card p-6">
         <h2 className="mb-1 text-lg">Riesgos</h2>
@@ -481,6 +484,62 @@ function DeploymentHistory({ boardId, canSync, onOpenCard }: { boardId: string; 
               })}
             </tbody>
           </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+type Briefing = { headline: string; highlights: string[]; risks: string[]; nextActions: string[]; generatedAt: string };
+
+/** Resumen ejecutivo redactado por IA a partir de los indicadores de este panel (no inventa datos). */
+function AiBriefing({ boardId }: { boardId: string }) {
+  const enabled = useAiEnabled();
+  const run = useMutation({ mutationFn: () => api<Briefing>(`/boards/${boardId}/ai/briefing`, { method: "POST" }) });
+  if (!enabled) return null;
+  const b = run.data;
+  return (
+    <section className="mb-6 rounded-[2rem] border border-primary/30 bg-card p-6" aria-label="Resumen con IA">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="flex flex-1 items-center gap-2 text-lg">
+          <Sparkles className="size-4 text-primary" /> Resumen con IA
+        </h2>
+        <Button size="sm" variant={b ? "secondary" : "primary"} loading={run.isPending} onClick={() => run.mutate()}>
+          {b ? "Actualizar" : "Generar resumen"}
+        </Button>
+      </div>
+      {!b && !run.isPending && (
+        <p className="mt-2 text-sm text-muted-foreground">Claude redacta el estado del tablero a partir de los indicadores de este panel: sin descripciones ni comentarios, y sin inventar datos.</p>
+      )}
+      {run.isPending && (
+        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Spinner className="size-4" /> Analizando los indicadores…
+        </p>
+      )}
+      {run.error && <p className="mt-3 text-sm text-destructive">{(run.error as Error).message}</p>}
+      {b && (
+        <div className="mt-4 space-y-4">
+          <p className="display-title text-2xl">{b.headline}</p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {(
+              [
+                ["Lo más importante", b.highlights],
+                ["Riesgos", b.risks],
+                ["Próximas acciones", b.nextActions],
+              ] as const
+            ).map(([title, items]) => (
+              <div key={title}>
+                <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{title}</h3>
+                <ul className="list-disc space-y-1 pl-4 text-sm">
+                  {items.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                  {items.length === 0 && <li className="list-none text-muted-foreground">—</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Generado {ago(b.generatedAt)} · revisalo antes de compartirlo.</p>
         </div>
       )}
     </section>

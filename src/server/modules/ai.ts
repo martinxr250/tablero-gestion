@@ -1,17 +1,17 @@
 import "server-only";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { route } from "../api/router";
 import { badRequest } from "../core/errors";
 import { withUser } from "../db/client";
-import { attachments, boardFiles, cards, checklistItems, checklists, comments, labels, lists } from "../db/schema";
+import { activityLogs, attachments, boardFiles, cards, checklistItems, checklists, comments, labels, lists, sprints, users } from "../db/schema";
 import { storage } from "../storage/storage";
 import { aiEnabled, generate, monthlyUsage, type AiInput } from "../ai/claude";
 import { AI_READABLE, fileToContent, UNTRUSTED_NOTE } from "../ai/content";
 import { env } from "../core/env";
 import { boardAccess, cardAccess, orgAccess } from "./access";
 import { boardFileFor } from "./board-files";
-import { boardPeople } from "./boards";
+import { boardCards, boardPeople } from "./boards";
 import { boardSignals } from "./signals";
 import { logActivity } from "./shared";
 
@@ -35,6 +35,7 @@ const AssistSchema = z.object({
   risks: z.array(z.string()),
 });
 const FileSummarySchema = z.object({ summary: z.string(), keyPoints: z.array(z.string()) });
+const AskSchema = z.object({ answer: z.string(), cards: z.array(z.number().int()) });
 const BriefingSchema = z.object({
   headline: z.string(),
   highlights: z.array(z.string()),
@@ -109,7 +110,7 @@ export const aiRoutes = [
       });
       const out = await generate(
         { orgId: ctx.board.orgId, userId: me.id, boardId: ctx.board.id, feature: "tasks_from_file" },
-        { system: `Sos un asistente de planificación de proyectos. ${UNTRUSTED_NOTE}`, content, schema: TasksSchema, effort: "low", maxTokens: 12000 },
+        { system: `Sos un asistente de planificación de proyectos. ${UNTRUSTED_NOTE}`, content, schema: TasksSchema, maxTokens: 12000 },
       );
       const peopleSet = new Set(ctx.people.map((p) => p.toLowerCase()));
       return {
@@ -130,19 +131,19 @@ export const aiRoutes = [
   route({
     method: "POST",
     path: "/cards/:cardId/ai/assist",
-    summary: "Resumen de la tarjeta y propuesta de subtareas y checklist (incluye sus PDF e imágenes)",
+    summary: "Resumen de la tarjeta, riesgos y (para quien edita) subtareas y checklist sugeridas; lee sus PDF e imágenes",
     tag: "IA",
     rateLimit: [{ name: "ai", by: "user", limit: 30, windowSec: 3600 }],
     handler: async ({ me, params }) => {
       const data = await withUser(me.id, async (tx) => {
-        const { card, board } = await cardAccess(tx, { actorId: me.id }, params.cardId, "edit");
+        const { card, board, role } = await cardAccess(tx, { actorId: me.id }, params.cardId, "view");
         const [items, recent, subtasks, files] = await Promise.all([
           tx.select({ list: checklists.title, text: checklistItems.text, doneAt: checklistItems.doneAt }).from(checklistItems).innerJoin(checklists, eq(checklists.id, checklistItems.checklistId)).where(eq(checklists.cardId, card.id)),
           tx.select({ body: comments.body }).from(comments).where(and(eq(comments.cardId, card.id), isNull(comments.deletedAt))).orderBy(desc(comments.createdAt)).limit(20),
           tx.select({ title: cards.title }).from(cards).where(and(eq(cards.parentId, card.id), isNull(cards.archivedAt))),
           tx.select().from(attachments).where(eq(attachments.cardId, card.id)).orderBy(desc(attachments.createdAt)),
         ]);
-        return { card, board, items, recent, subtasks, files };
+        return { card, board, items, recent, subtasks, files, canApply: (role === "editor" || role === "admin") && !board.archivedAt };
       });
       const content: AiInput[] = [];
       // Hasta 3 archivos legibles (PDF, imágenes, texto) de la tarjeta.
@@ -164,13 +165,15 @@ export const aiRoutes = [
       });
       const out = await generate(
         { orgId: data.board.orgId, userId: me.id, boardId: data.board.id, feature: "card_assist" },
-        { system: `Sos un asistente de gestión de proyectos que ayuda a ordenar el trabajo de una tarea. ${UNTRUSTED_NOTE}`, content, schema: AssistSchema, effort: "low" },
+        { system: `Sos un asistente de gestión de proyectos que ayuda a ordenar el trabajo de una tarea. ${UNTRUSTED_NOTE}`, content, schema: AssistSchema },
       );
       const existing = new Set(data.subtasks.map((s) => s.title.toLowerCase()));
       return {
         summary: clip(out.summary, 1500),
-        subtasks: clipList(out.subtasks, 10, 200).filter((s) => !existing.has(s.toLowerCase())),
-        checklist: clipList(out.checklist, 12, 300),
+        // Quien solo ve recibe la explicación y los riesgos; las sugerencias para aplicar son de quien edita.
+        canApply: data.canApply,
+        subtasks: data.canApply ? clipList(out.subtasks, 10, 200).filter((s) => !existing.has(s.toLowerCase())) : [],
+        checklist: data.canApply ? clipList(out.checklist, 12, 300) : [],
         risks: clipList(out.risks, 5, 300),
         filesRead: Math.min(3, data.files.filter((f) => AI_READABLE.has(f.mime)).length),
       };
@@ -193,7 +196,6 @@ export const aiRoutes = [
           system: `Sos un asistente que resume documentos de trabajo para un equipo. ${UNTRUSTED_NOTE}`,
           content: [block!, { type: "text", text: "Resumí este material para el equipo: de qué se trata y los puntos clave (decisiones, fechas, requisitos, pendientes)." }],
           schema: FileSummarySchema,
-          effort: "low",
         },
       );
       const points = clipList(out.keyPoints, 8, 300);
@@ -203,6 +205,85 @@ export const aiRoutes = [
         await logActivity(tx, { orgId: board.orgId, boardId: board.id, actorId: me.id, action: "board_file.summarized", data: { file: file.fileName } });
       });
       return { summary: text };
+    },
+  }),
+
+  route({
+    method: "POST",
+    path: "/boards/:boardId/ai/ask",
+    summary: "Preguntale al tablero: respuestas con los datos que la persona puede ver (para todos los roles)",
+    tag: "IA",
+    rateLimit: [{ name: "ai", by: "user", limit: 30, windowSec: 3600 }],
+    body: z.object({ question: z.string().trim().min(3).max(500) }),
+    handler: async ({ me, params, body }) => {
+      const snap = await withUser(me.id, async (tx) => {
+        const { board } = await boardAccess(tx, { actorId: me.id }, params.boardId, "view", { allowArchived: true });
+        const [cardRows, listRows, people, labelRows, sprintRows, activity] = await Promise.all([
+          boardCards(tx, board.id),
+          tx.select({ id: lists.id, name: lists.name }).from(lists).where(and(eq(lists.boardId, board.id), isNull(lists.archivedAt))),
+          boardPeople(tx, board.id),
+          tx.select({ id: labels.id, name: labels.name }).from(labels).where(eq(labels.boardId, board.id)),
+          tx.select({ id: sprints.id, name: sprints.name, status: sprints.status, endsOn: sprints.endsOn }).from(sprints).where(eq(sprints.boardId, board.id)),
+          tx
+            .select({ at: activityLogs.createdAt, action: activityLogs.action, data: activityLogs.data, who: users.name })
+            .from(activityLogs)
+            .leftJoin(users, eq(users.id, activityLogs.actorId))
+            .where(and(eq(activityLogs.boardId, board.id), gt(activityLogs.createdAt, new Date(Date.now() - 14 * 86_400_000))))
+            .orderBy(desc(activityLogs.id))
+            .limit(80),
+        ]);
+        return { board, cardRows, listRows, people, labelRows, sprintRows, activity };
+      });
+      const list = new Map(snap.listRows.map((l) => [l.id, l.name]));
+      const person = new Map(snap.people.map((p) => [p.user_id, p.name]));
+      const label = new Map(snap.labelRows.map((l) => [l.id, l.name]));
+      const sprint = new Map(snap.sprintRows.map((s) => [s.id, s.name]));
+      // Tarjetas abiertas y las terminadas en los últimos 30 días (hasta 300), numeradas.
+      const recentDone = Date.now() - 30 * 86_400_000;
+      const pool = snap.cardRows.filter((c) => (!c.completedAt || new Date(c.completedAt).getTime() > recentDone)).slice(0, 300);
+      const rows = pool.map((c, i) => ({
+        n: i + 1,
+        titulo: c.title,
+        lista: list.get(c.listId) ?? "",
+        responsable: c.ownerId ? (person.get(c.ownerId) ?? "") : "",
+        colaboradores: c.assigneeIds.map((a) => person.get(a)).filter(Boolean),
+        prioridad: c.priority,
+        vence: c.dueAt ? new Date(c.dueAt).toISOString().slice(0, 10) : null,
+        terminada: !!c.completedAt,
+        bloqueada: c.blocked,
+        qa: c.qaStatus,
+        etapa: c.sprintId ? (sprint.get(c.sprintId) ?? null) : null,
+        etiquetas: c.labelIds.map((l) => label.get(l)).filter(Boolean),
+        puntos: c.estimatePoints,
+        subtareas: c.subtaskTotal ? `${c.subtaskDone}/${c.subtaskTotal}` : null,
+        resumen: c.excerpt || null,
+      }));
+      const activity = snap.activity.map((a) => ({
+        fecha: a.at.toISOString().slice(0, 16).replace("T", " "),
+        persona: a.who ?? "Sistema",
+        accion: a.action,
+        tarjeta: typeof a.data?.title === "string" ? a.data.title : undefined,
+      }));
+      const me_ = person.get(me.id) ?? "";
+      const out = await generate(
+        { orgId: snap.board.orgId, userId: me.id, boardId: snap.board.id, feature: "board_ask" },
+        {
+          system: `Respondés preguntas sobre un tablero de proyecto usando solo los datos que te pasan (tarjetas y actividad de los últimos 14 días). Si los datos no alcanzan para responder, decilo. Sé breve y concreto; mencioná las tarjetas por su título. ${UNTRUSTED_NOTE}`,
+          content: [
+            {
+              type: "text",
+              text: `Tablero "${snap.board.name}". Hoy es ${new Date().toISOString().slice(0, 10)}. Quien pregunta: ${me_ || "una persona del equipo"}.\n\nTarjetas (JSON):\n${JSON.stringify(rows)}\n\nActividad reciente (JSON):\n${JSON.stringify(activity)}`,
+            },
+            { type: "text", text: `Pregunta: ${body.question}\n\nEn "cards" devolvé los números (n) de las tarjetas que mencionás.` },
+          ],
+          schema: AskSchema,
+        },
+      );
+      const cardsOut = [...new Set(out.cards)]
+        .filter((n) => Number.isInteger(n) && n >= 1 && n <= pool.length)
+        .slice(0, 12)
+        .map((n) => ({ id: pool[n - 1]!.id, title: pool[n - 1]!.title }));
+      return { answer: clip(out.answer, 3000), cards: cardsOut };
     },
   }),
 
@@ -232,7 +313,6 @@ export const aiRoutes = [
           system: `Sos un asistente para líderes de proyecto. Redactás un resumen ejecutivo a partir de indicadores ya calculados. Usá solo esos datos: si algo no está, no lo supongas. ${UNTRUSTED_NOTE}`,
           content: [{ type: "text", text: `Tablero "${board.name}". Indicadores (JSON):\n${JSON.stringify(facts)}\n\nEscribí un titular, lo más importante, los riesgos y las próximas acciones recomendadas.` }],
           schema: BriefingSchema,
-          effort: "medium",
         },
       );
       return {
