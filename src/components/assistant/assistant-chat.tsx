@@ -127,7 +127,7 @@ export function AssistantChat() {
 
   const openLink = async (kind: "card" | "board" | "design", id: string) => {
     if (kind === "board") return router.push(`/b/${id}`);
-    if (kind === "design") return router.push(`/studio/${id}`);
+    if (kind === "design") return router.push(`/ia/estudio/${id}`);
     try {
       const r = await api<{ card: { boardId: string } }>(`/cards/${id}`);
       router.push(`/b/${r.card.boardId}?card=${id}`);

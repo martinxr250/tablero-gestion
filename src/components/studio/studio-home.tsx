@@ -72,7 +72,7 @@ export function StudioHome() {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {q.data.projects.map((p) => (
             <li key={p.id}>
-              <Link href={`/studio/${p.id}`} className="project-tile group flex h-full flex-col rounded-[1.75rem] border bg-card p-5">
+              <Link href={`/ia/estudio/${p.id}`} className="project-tile group flex h-full flex-col rounded-[1.75rem] border bg-card p-5">
                 <div className="flex items-start gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-muted">
                     <Blocks className="size-5 text-muted-foreground" />
@@ -122,7 +122,7 @@ function NewProjectDialog({ orgId, onClose }: { orgId: string; onClose: () => vo
   const ws = workspaceId || editable[0]?.id || "";
   const create = useMutation({
     mutationFn: () => api<{ id: string }>(`/orgs/${orgId}/design-projects`, { method: "POST", body: { workspaceId: ws, name, brief } }),
-    onSuccess: (r) => router.push(`/studio/${r.id}`),
+    onSuccess: (r) => router.push(`/ia/estudio/${r.id}`),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Nuevo proyecto de software" description="Contá la idea con el mayor detalle posible: quiénes lo usan, qué procesos resuelve y qué restricciones hay." wide>

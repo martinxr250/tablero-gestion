@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { StudioHome } from "@/components/studio/studio-home";
-
-export const metadata: Metadata = { title: "Estudio de software" };
+import { redirect } from "next/navigation";
 
 export default function StudioPage() {
-  return <StudioHome />;
+  redirect("/ia?tab=estudio");
 }

@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import { AssistantChat } from "@/components/assistant/assistant-chat";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Asistente IA" };
-
+// La IA vive en una sola sección: se conserva la dirección anterior.
 export default function AssistantPage() {
-  return <AssistantChat />;
+  redirect("/ia");
 }

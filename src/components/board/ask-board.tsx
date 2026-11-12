@@ -111,7 +111,7 @@ export function AskBoard({ boardId, orgId, boardName, onOpenCard, onClose }: { b
 
   const openLink = async (kind: "card" | "board" | "design", id: string) => {
     if (kind === "card") return onOpenCard(id);
-    router.push(kind === "board" ? `/b/${id}` : `/studio/${id}`);
+    router.push(kind === "board" ? `/b/${id}` : `/ia/estudio/${id}`);
   };
 
   return (

@@ -74,12 +74,12 @@ export function ProjectView({ projectId }: { projectId: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
       <div className="mb-6 flex flex-wrap items-start gap-3">
-        <Link href="/studio" className="mt-1.5 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Volver al Estudio">
+        <Link href="/ia?tab=estudio" className="mt-1.5 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Volver al Estudio">
           <ArrowLeft className="size-5" />
         </Link>
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">
-            Estudio · {project.workspaceName}
+            IA · Estudio · {project.workspaceName}
             {project.createdBy && ` · creado por ${project.createdBy}`}
           </p>
           <h1 className="display-title truncate text-3xl sm:text-4xl">{project.name}</h1>
@@ -93,7 +93,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
           <a href={`/api/v1/design-projects/${projectId}/export`} className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted">
             <Download className="size-4" /> Exportar
           </a>
-          {canEdit && <ProjectMenu project={project} onDeleted={() => router.push("/studio")} refresh={refresh} />}
+          {canEdit && <ProjectMenu project={project} onDeleted={() => router.push("/ia?tab=estudio")} refresh={refresh} />}
         </div>
       </div>
 

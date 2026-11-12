@@ -73,6 +73,7 @@ Está construida como un producto completo: autenticación propia, permisos por 
 - Búsqueda global (⌘K) y búsqueda avanzada por organización, espacio, tablero, persona, estado, prioridad y fecha.
 
 **Inteligencia artificial (Claude)**
+- Todo en una sola sección, **IA**: el Asistente y el Estudio de software, como pestañas.
 - **Tareas desde documentos:** subís un PDF, imagen o texto (o lo pegás) y la IA propone tareas con prioridad, fecha, responsable y subtareas; nada se crea sin tu revisión.
 - **Explicar una tarjeta:** resume la tarea, sus comentarios y adjuntos, marca riesgos y sugiere subtareas y checklist para agregar con un clic.
 - **Preguntale al tablero:** respuestas en lenguaje natural con enlaces a las tarjetas, solo con lo que cada persona puede ver.
