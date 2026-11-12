@@ -416,9 +416,6 @@ function UserMenu({ user }: { user: ShellUser }) {
         <MenuItem onSelect={() => router.push("/settings")}>
           <UserRound /> Mi cuenta
         </MenuItem>
-        <MenuItem onSelect={() => router.push("/docs/api")}>
-          <Settings /> Documentación de la API
-        </MenuItem>
         <MenuSeparator />
         <MenuItem danger onSelect={logout}>
           <LogOut /> Cerrar sesión

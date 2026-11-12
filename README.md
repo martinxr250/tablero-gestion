@@ -135,7 +135,7 @@ En cada tablero: **Administrador** (configura y gestiona miembros) · **Editor**
 | Datos en cliente | TanStack Query |
 | Base de datos | PostgreSQL ([Supabase](https://supabase.com)) · [Drizzle ORM](https://orm.drizzle.team) · migraciones SQL versionadas |
 | Autenticación | JWT propio con [jose](https://github.com/panva/jose) (Ed25519) · Argon2id · TOTP (otplib) |
-| Validación | Zod (también genera el OpenAPI) |
+| Validación | Zod |
 | Archivos | Supabase Storage (bucket privado) |
 | Correo | SMTP (Nodemailer) |
 | Tests | Vitest (integración contra Postgres real) · Playwright |
@@ -152,7 +152,7 @@ proxy.ts ── CSP con nonce y headers de seguridad
 Next.js — monolito modular
    ├─ app/(auth), app/(app)          pantallas
    └─ app/api/v1/[...path]            API única → src/server/api/router.ts
-          CSRF · autenticación · rate limit · validación · errores seguros · OpenAPI
+          CSRF · autenticación · rate limit · validación · errores seguros
           └─ src/server/modules/*    auth · organizaciones · espacios · tableros · tarjetas · planificación
                                      mi trabajo · señales · entregas · integraciones · IA · asistente · estudio · cron
    ▼
@@ -162,7 +162,6 @@ PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron   GitHub /
 - **El navegador solo habla con la API propia.** La base de datos, el almacenamiento y el correo se usan exclusivamente desde el servidor.
 - **Aislamiento entre organizaciones en capas:** autorización central, *Row-Level Security* de Postgres (cada request corre con un rol sin privilegios y el usuario en contexto) y claves foráneas compuestas por organización.
 - **Una sola fuente de verdad para los permisos:** el rol efectivo en cada tablero lo resuelve una función SQL.
-- La documentación de la API está en `/docs/api` y la especificación en `/api/v1/openapi.json`.
 
 ## Seguridad
 

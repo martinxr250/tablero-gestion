@@ -154,9 +154,7 @@ describe("protecciones del router", () => {
     expect(ok.status).toBe(200);
   });
 
-  it("publica el documento OpenAPI", async () => {
-    const r = await new Client().get("/openapi.json");
-    expect(r.status).toBe(200);
-    expect(Object.keys(r.body.paths).length).toBeGreaterThan(50);
+  it("no publica la documentación de la API", async () => {
+    expect((await new Client().get("/openapi.json")).status).toBe(404);
   });
 });

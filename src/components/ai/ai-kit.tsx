@@ -19,7 +19,7 @@ export function AiMark({ size = "md", pulse, className }: { size?: "sm" | "md" |
 }
 
 /** Espera mientras la IA trabaja: mensajes que avanzan y renglones de muestra. */
-export function AiThinking({ steps, lines = 3, compact, className }: { steps: string[]; lines?: number; compact?: boolean; className?: string }) {
+export function AiThinking({ steps, lines = 3, compact, icon = true, className }: { steps: string[]; lines?: number; compact?: boolean; icon?: boolean; className?: string }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (steps.length < 2) return;
@@ -29,7 +29,7 @@ export function AiThinking({ steps, lines = 3, compact, className }: { steps: st
   return (
     <div className={cn("space-y-3", className)} role="status" aria-live="polite">
       <div className="flex items-center gap-3">
-        <AiMark size={compact ? "sm" : "md"} pulse />
+        {icon && <AiMark size={compact ? "sm" : "md"} pulse />}
         <p key={i} className="ai-shimmer ai-reveal text-sm font-medium">
           {steps[i]}
         </p>

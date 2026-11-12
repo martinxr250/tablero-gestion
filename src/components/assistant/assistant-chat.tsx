@@ -228,7 +228,7 @@ export function AssistantChat() {
                   <li className="flex gap-3">
                     <AiMark size="sm" className="mt-0.5" />
                     <div className="ai-surface flex-1 rounded-2xl px-4 py-3.5">
-                      <AiThinking compact lines={2} steps={confirm.isPending ? ["Haciendo los cambios…", "Revisando que todo quedó bien…"] : ["Entendiendo el pedido…", "Consultando tableros y tarjetas…", "Preparando la respuesta…"]} />
+                      <AiThinking compact icon={false} lines={2} steps={confirm.isPending ? ["Haciendo los cambios…", "Revisando que todo quedó bien…"] : ["Entendiendo el pedido…", "Consultando tableros y tarjetas…", "Preparando la respuesta…"]} />
                     </div>
                   </li>
                 )}
