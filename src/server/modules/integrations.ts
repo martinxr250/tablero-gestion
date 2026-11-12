@@ -23,12 +23,16 @@ import {
   type BoardRepoSettings,
 } from "../db/schema";
 import { GITHUB_API, GitHubClient } from "../integrations/github";
+import { GitLabClient, gitlabDeployState } from "../integrations/gitlab";
 import type { RemoteIssue, RemotePull } from "../integrations/provider";
 import { syncDeployments, upsertDeployment } from "../integrations/deployments";
-import { clientFor, createIssueForCard, linkExistingIssue, loadRepo, notifyCardPeople, reconcileIssue, resolveConflict, syncPull, syncRepo } from "../integrations/sync";
+import { clientFor, gitlabApiBase, createIssueForCard, linkExistingIssue, loadRepo, notifyCardPeople, reconcileIssue, resolveConflict, syncPull, syncRepo } from "../integrations/sync";
 import { boardAccess, cardAccess, orgAccess, orgRoleAtLeast } from "./access";
 
-const providerSchema = z.enum(["github"]);
+const providerSchema = z.enum(["github", "gitlab"]);
+const PROVIDER_NAME = { github: "GitHub", gitlab: "GitLab" } as const;
+/** Nombres de usuario válidos de cada proveedor. */
+const LOGIN_RE = { github: /^[A-Za-z0-9-]{1,39}$/, gitlab: /^[A-Za-z0-9_.-]{1,100}$/ } as const;
 
 /** Los webhooks solo se registran si la app tiene una URL pública con HTTPS (en local se sincroniza por sondeo). */
 const webhookBase = () => (env().APP_URL.startsWith("https://") ? env().APP_URL.replace(/\/$/, "") : null);
@@ -57,7 +61,7 @@ export const integrationRoutes = [
       withUser(me.id, async (tx) => {
         await orgAccess(tx, me.id, params.orgId, "member");
         const rows = await tx
-          .select({ id: vcsConnections.id, provider: vcsConnections.provider, accountLogin: vcsConnections.accountLogin, createdAt: vcsConnections.createdAt })
+          .select({ id: vcsConnections.id, provider: vcsConnections.provider, apiBaseUrl: vcsConnections.apiBaseUrl, accountLogin: vcsConnections.accountLogin, createdAt: vcsConnections.createdAt })
           .from(vcsConnections)
           .where(eq(vcsConnections.orgId, params.orgId))
           .orderBy(asc(vcsConnections.createdAt));
@@ -68,21 +72,27 @@ export const integrationRoutes = [
   route({
     method: "POST",
     path: "/orgs/:orgId/vcs/connections",
-    summary: "Conectar una cuenta de GitHub con un token (se guarda cifrado)",
+    summary: "Conectar una cuenta de GitHub o GitLab con un token (se guarda cifrado; sirve para repos privados)",
     tag: "Integraciones",
     status: 201,
     rateLimit: [{ name: "vcs-connect", by: "user", limit: 10, windowSec: 3600 }],
-    body: z.object({ provider: providerSchema, token: z.string().trim().min(20).max(300) }),
+    body: z.object({
+      provider: providerSchema,
+      token: z.string().trim().min(20).max(300),
+      /** Solo GitLab: dirección del servidor (por defecto gitlab.com; otros deben estar en GITLAB_HOSTS). */
+      baseUrl: z.string().trim().max(200).optional(),
+    }),
     handler: async ({ me, params, body, audit: actx }) => {
       await withUser(me.id, (tx) => orgAccess(tx, me.id, params.orgId, "admin"));
-      const viewer = await new GitHubClient(body.token).viewer();
+      const apiBaseUrl = body.provider === "gitlab" ? gitlabApiBase(body.baseUrl) : GITHUB_API;
+      const viewer = await (body.provider === "gitlab" ? new GitLabClient(body.token, apiBaseUrl) : new GitHubClient(body.token)).viewer();
       const id = uuidv7();
       await withUser(me.id, async (tx) => {
         await tx.insert(vcsConnections).values({
           id,
           orgId: params.orgId,
           provider: body.provider,
-          apiBaseUrl: GITHUB_API,
+          apiBaseUrl,
           tokenEnc: encrypt(body.token),
           accountLogin: viewer.login,
           createdBy: me.id,
@@ -302,7 +312,7 @@ export const integrationRoutes = [
   route({
     method: "POST",
     path: "/boards/:boardId/repo/deployments/sync",
-    summary: "Conciliar despliegues: trae los recientes de GitHub y actualiza los eventos del webhook",
+    summary: "Conciliar despliegues: trae los recientes del proveedor y actualiza los eventos del webhook",
     tag: "Integraciones",
     rateLimit: [{ name: "vcs-deploy-sync", by: "user", limit: 6, windowSec: 60 }],
     handler: async ({ me, params, audit: actx }) => {
@@ -510,7 +520,7 @@ export const integrationRoutes = [
   route({
     method: "DELETE",
     path: "/cards/:cardId/dev/pulls/:number",
-    summary: "Desvincular un pull request de la tarjeta (en GitHub no cambia nada)",
+    summary: "Desvincular un pull/merge request de la tarjeta (en el proveedor no cambia nada)",
     tag: "Integraciones",
     handler: async ({ me, params }) =>
       withUser(me.id, async (tx) => {
@@ -558,14 +568,18 @@ export const integrationRoutes = [
     path: "/orgs/:orgId/vcs/users",
     summary: "Cuentas del proveedor asociadas a cada miembro",
     tag: "Integraciones",
-    handler: async ({ me, params }) =>
+    query: z.object({ provider: providerSchema.default("github") }),
+    handler: async ({ me, params, query }) =>
       withUser(me.id, async (tx) => {
         await orgAccess(tx, me.id, params.orgId, "member");
         const rows = await tx
           .select({ userId: organizationMembers.userId, name: users.name, provider: vcsUserLinks.provider, login: vcsUserLinks.login })
           .from(organizationMembers)
           .innerJoin(users, eq(users.id, organizationMembers.userId))
-          .leftJoin(vcsUserLinks, and(eq(vcsUserLinks.orgId, organizationMembers.orgId), eq(vcsUserLinks.userId, organizationMembers.userId)))
+          .leftJoin(
+            vcsUserLinks,
+            and(eq(vcsUserLinks.orgId, organizationMembers.orgId), eq(vcsUserLinks.userId, organizationMembers.userId), eq(vcsUserLinks.provider, query.provider)),
+          )
           .where(eq(organizationMembers.orgId, params.orgId))
           .orderBy(users.name);
         return { members: rows };
@@ -577,9 +591,10 @@ export const integrationRoutes = [
     path: "/orgs/:orgId/vcs/users/:userId",
     summary: "Asociar (o quitar) la cuenta del proveedor de un miembro",
     tag: "Integraciones",
-    body: z.object({ provider: providerSchema, login: z.string().trim().regex(/^[A-Za-z0-9-]{1,39}$/, "Usuario de GitHub inválido").nullable() }),
+    body: z.object({ provider: providerSchema, login: z.string().trim().max(100).nullable() }),
     handler: async ({ me, params, body }) =>
       withUser(me.id, async (tx) => {
+        if (body.login && !LOGIN_RE[body.provider].test(body.login)) throw badRequest(`Usuario de ${PROVIDER_NAME[body.provider]} inválido`);
         const role = await orgAccess(tx, me.id, params.orgId, "member");
         if (params.userId !== me.id && !orgRoleAtLeast(role, "admin")) throw forbidden();
         await tx
@@ -603,7 +618,7 @@ export const integrationRoutes = [
       const repo = await withSystem(async (tx) => (await tx.select().from(boardRepos).where(eq(boardRepos.id, params.boardRepoId)))[0]);
       // Respuesta idéntica si no existe o la firma no coincide: no se revela qué repos están vinculados.
       const signature = req.headers.get("x-hub-signature-256") ?? "";
-      if (!repo?.webhookSecretEnc || !rawBody) throw new AppError(401, "invalid_signature", "Firma inválida");
+      if (!repo?.webhookSecretEnc || repo.provider !== "github" || !rawBody) throw new AppError(401, "invalid_signature", "Firma inválida");
       const expected = `sha256=${createHmac("sha256", decrypt(repo.webhookSecretEnc)).update(rawBody).digest("hex")}`;
       if (!safeEqual(signature, expected)) throw new AppError(401, "invalid_signature", "Firma inválida");
 
@@ -672,6 +687,91 @@ export const integrationRoutes = [
           (payload.check_suite as { head_sha?: string } | undefined)?.head_sha ?? (payload.check_run as { head_sha?: string } | undefined)?.head_sha;
         const { pulls } = await ctx.client.listPulls(repo.repoFullName, 1);
         for (const pull of pulls.filter((x) => x.headSha === sha)) await syncPull(ctx, pull, { details: true });
+      }
+      return { ok: true };
+    },
+  }),
+  route({
+    method: "POST",
+    path: "/webhooks/gitlab/:boardRepoId",
+    summary: "Receptor de webhooks de GitLab (token secreto y deduplicación por evento)",
+    tag: "Integraciones",
+    auth: "webhook",
+    rawBody: true,
+    rateLimit: [{ name: "webhook", by: "ip", limit: 600, windowSec: 60 }],
+    handler: async ({ req, params, rawBody }) => {
+      const repo = await withSystem(async (tx) => (await tx.select().from(boardRepos).where(eq(boardRepos.id, params.boardRepoId)))[0]);
+      // GitLab no firma el cuerpo: envía el secreto en X-Gitlab-Token. Comparación en tiempo constante
+      // y la misma respuesta si el repo no existe, así no se revela qué repos están vinculados.
+      const token = req.headers.get("x-gitlab-token") ?? "";
+      if (!repo?.webhookSecretEnc || repo.provider !== "gitlab" || !rawBody) throw new AppError(401, "invalid_signature", "Firma inválida");
+      if (!safeEqual(token, decrypt(repo.webhookSecretEnc))) throw new AppError(401, "invalid_signature", "Firma inválida");
+
+      const delivery = req.headers.get("x-gitlab-event-uuid") ?? req.headers.get("idempotency-key") ?? "";
+      const event = req.headers.get("x-gitlab-event") ?? "";
+      if (!delivery) throw badRequest("Falta el identificador de entrega");
+      const inserted = await withSystem((tx) =>
+        tx.insert(webhookDeliveries).values({ deliveryId: `gl:${delivery}`.slice(0, 100), boardRepoId: repo.id, event: event.slice(0, 50) }).onConflictDoNothing().returning(),
+      );
+      if (inserted.length === 0) return { ok: true, duplicate: true };
+
+      const payload = JSON.parse(rawBody) as { object_kind?: string; object_attributes?: Record<string, unknown>; [k: string]: unknown };
+      const attrs = payload.object_attributes ?? {};
+      const ctx = await withSystem((tx) => loadRepo(tx, repo.id));
+      if (payload.object_kind === "issue" || payload.object_kind === "work_item") {
+        // Siempre se relee el issue: el webhook solo avisa que algo cambió.
+        if (attrs.type === undefined || attrs.type === "Issue") {
+          const issue = await ctx.client.getIssue(repo.repoFullName, Number(attrs.iid));
+          await reconcileIssue(ctx, issue, { importIfNew: repo.settings.importNew !== false });
+        }
+      } else if (payload.object_kind === "merge_request") {
+        const pull = await ctx.client.getPull(repo.repoFullName, Number(attrs.iid));
+        await syncPull(ctx, pull, { details: true });
+        // Revisores nuevos: avisa solo a quienes tienen su usuario de GitLab asociado.
+        const changes = payload.changes as { reviewers?: { previous?: { username: string }[]; current?: { username: string }[] } } | undefined;
+        const before = new Set((changes?.reviewers?.previous ?? []).map((r) => r.username));
+        const added = (changes?.reviewers?.current ?? []).map((r) => r.username).filter((u) => !before.has(u));
+        if (added.length) {
+          await withSystem(async (tx) => {
+            const who = await tx
+              .select({ userId: vcsUserLinks.userId, login: vcsUserLinks.login })
+              .from(vcsUserLinks)
+              .where(and(eq(vcsUserLinks.orgId, repo.orgId), eq(vcsUserLinks.provider, "gitlab"), inArray(vcsUserLinks.login, added)));
+            if (!who.length) return;
+            const cards = await tx.execute<{ card_id: string }>(sql`
+              select d.card_id from app.card_dev_refs d join app.cards c on c.id = d.card_id
+              where c.board_id = ${repo.boardId} and d.kind = 'pr' and d.external_id = ${String(pull.number)}`);
+            for (const c of cards) {
+              for (const w of who) {
+                await notifyCardPeople(tx, c.card_id, {
+                  type: "pr.review_requested",
+                  data: { number: pull.number, prTitle: pull.title.slice(0, 200), url: pull.htmlUrl },
+                  dedupeKey: `review:${pull.number}:${w.login}:${pull.updatedAt}`,
+                  only: [w.userId],
+                });
+              }
+            }
+          });
+        }
+      } else if (payload.object_kind === "pipeline") {
+        // El pipeline cambia los checks de los MRs con ese commit.
+        const mr = payload.merge_request as { iid?: number } | null | undefined;
+        if (mr?.iid) {
+          await syncPull(ctx, await ctx.client.getPull(repo.repoFullName, mr.iid), { details: true });
+        } else {
+          const sha = String(attrs.sha ?? "");
+          const { pulls } = await ctx.client.listPulls(repo.repoFullName, 1);
+          for (const pull of pulls.filter((x) => x.headSha === sha)) await syncPull(ctx, pull, { details: true });
+        }
+      } else if (payload.object_kind === "deployment") {
+        // El evento trae el commit abreviado: se toma el despliegue completo de la API (una llamada).
+        const id = Number(payload.deployment_id);
+        const d = (await ctx.client.listDeployments(repo.repoFullName, 20)).find((x) => x.id === id);
+        if (d) {
+          const url = typeof payload.environment_external_url === "string" ? payload.environment_external_url : null;
+          const at = typeof payload.status_changed_at === "string" ? payload.status_changed_at : new Date().toISOString();
+          await upsertDeployment(ctx, d, { state: gitlabDeployState(String(payload.status ?? "")), url, createdAt: at });
+        }
       }
       return { ok: true };
     },

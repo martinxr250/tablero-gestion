@@ -154,7 +154,7 @@ export function InsightsView({ boardId, canManage, canEdit, onOpenCard }: { boar
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             {(
               [
-                ["Con PR abierto", d.health.withOpenPr],
+                ["Con PR/MR abierto", d.health.withOpenPr],
                 ["Esperando revisión", d.health.waitingReview],
                 ["CI fallida", d.health.checksFailing],
                 ["Código fusionado", d.health.merged],
@@ -429,13 +429,13 @@ function DeploymentHistory({ boardId, canSync, onOpenCard }: { boardId: string; 
         <h2 className="flex-1 text-lg">Despliegues</h2>
         {canSync && (
           <Button size="sm" variant="secondary" loading={sync.isPending} onClick={() => sync.mutate()}>
-            Conciliar con GitHub
+            Conciliar con el repositorio
           </Button>
         )}
       </div>
       {q.data.deployments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Sin despliegues registrados. Llegan desde GitHub Deployments (por ejemplo, la integración de Vercel con GitHub) cuando el tablero tiene un repositorio vinculado.
+          Sin despliegues registrados. Llegan desde los despliegues de GitHub o GitLab (por ejemplo, la integración de Vercel o GitLab CI/CD con entornos) cuando el tablero tiene un repositorio vinculado.
         </p>
       ) : (
         <div className="overflow-x-auto">

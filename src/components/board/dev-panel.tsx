@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Input } from "@/components/ui/primitives";
 import { useAiEnabled } from "@/lib/ai";
+import { vcs } from "@/lib/vcs";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -125,6 +126,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
   const data = q.data;
   if (!data?.repo) return null;
   const { issue } = data;
+  const t = vcs(data.repo.provider);
 
   return (
     <section>
@@ -139,7 +141,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
             <span className="text-muted-foreground">Esta tarjeta no tiene issue.</span>
             {canEdit && (
               <Button size="sm" variant="soft" loading={create.isPending} onClick={() => create.mutate()}>
-                <CircleDot /> Crear issue en GitHub
+                <CircleDot /> Crear issue en {t.name}
               </Button>
             )}
           </div>
@@ -162,7 +164,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
               Issue #{issue.number} <ExternalLink className="size-3.5" />
             </a>
             <Badge className={issue.state === "open" ? "bg-success/10 text-success" : "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200"}>
-              {issue.state === "open" ? "Abierto" : "Cerrado en GitHub"}
+              {issue.state === "open" ? "Abierto" : `Cerrado en ${t.name}`}
             </Badge>
             <span className="flex-1" />
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -170,7 +172,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
               {issue.pending ? "Pendiente de envío" : issue.syncedAt ? `Sincronizado ${ago(issue.syncedAt)}` : "Sin sincronizar"}
             </span>
             {canEdit && (
-              <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label="Desvincular issue" title="Desvincular (el issue no se borra)" onClick={() => confirm("¿Desvincular la tarjeta del issue? El issue sigue existiendo en GitHub.") && unlink.mutate()}>
+              <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label="Desvincular issue" title="Desvincular (el issue no se borra)" onClick={() => confirm(`¿Desvincular la tarjeta del issue? El issue sigue existiendo en ${t.name}.`) && unlink.mutate()}>
                 <Link2Off className="size-3.5" />
               </button>
             )}
@@ -182,7 +184,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                 <AlertTriangle className="size-4" /> La tarjeta y el issue cambiaron a la vez
               </p>
               <p className="text-amber-900/80 dark:text-amber-100/80">
-                En GitHub: <strong>{issue.conflict.remote.title}</strong> ({issue.conflict.remote.state === "open" ? "abierto" : "cerrado"})
+                En {t.name}: <strong>{issue.conflict.remote.title}</strong> ({issue.conflict.remote.state === "open" ? "abierto" : "cerrado"})
               </p>
               {canEdit && (
                 <div className="flex flex-wrap gap-2">
@@ -190,7 +192,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                     Quedarme con la tarjeta
                   </Button>
                   <Button size="sm" variant="secondary" loading={resolve.isPending && resolve.variables === "remote"} onClick={() => resolve.mutate("remote")}>
-                    Usar lo de GitHub
+                    Usar lo de {t.name}
                   </Button>
                 </div>
               )}
@@ -204,18 +206,18 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                   <li key={p.number} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
                     {p.state === "merged" ? <GitMerge className="size-4 text-violet-500" /> : <GitPullRequest className={cn("size-4", p.state === "open" ? "text-success" : "text-muted-foreground")} />}
                     <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium hover:text-primary">
-                      #{p.number} {p.title}
+                      {t.ref}{p.number} {p.title}
                     </a>
                     {p.draft && <Badge className="bg-card text-muted-foreground">Borrador</Badge>}
                     {p.manual && <Badge className="bg-card text-muted-foreground">Vinculado a mano</Badge>}
                     {p.review && <Badge className="bg-card">{REVIEW[p.review] ?? p.review}</Badge>}
                     {checks && (
                       <span className={cn("inline-flex items-center gap-1 text-xs font-medium", checks.cls)}>
-                        <checks.icon className="size-3.5" /> {checks.label}
+                        <checks.icon className="size-3.5" /> {t.checks === "pipeline" ? checks.label.replace("Checks", "Pipeline") : checks.label}
                       </span>
                     )}
                     {canEdit && p.manual && (
-                      <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular PR #${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
+                      <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular ${t.prShort} ${t.ref}${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
                         <Link2Off className="size-3.5" />
                       </button>
                     )}
@@ -229,7 +231,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
               })}
             </ul>
           )}
-          {data.pulls.length === 0 && <p className="text-xs text-muted-foreground">Los PRs que mencionen #{issue.number} (en el título, la descripción o la rama) aparecen acá.</p>}
+          {data.pulls.length === 0 && <p className="text-xs text-muted-foreground">Los {t.prsShort} que mencionen #{issue.number} (en el título, la descripción o la rama) aparecen acá.</p>}
         </div>
       )}
       {!issue && data.pulls.length > 0 && (
@@ -238,12 +240,12 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
             <li key={p.number} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
               {p.merged ? <GitMerge className="size-4 text-violet-500" /> : <GitPullRequest className="size-4 text-success" />}
               <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium hover:text-primary">
-                #{p.number} {p.title}
+                {t.ref}{p.number} {p.title}
               </a>
               {p.review && <Badge className="bg-card">{REVIEW[p.review] ?? p.review}</Badge>}
-              {p.checks && CHECKS[p.checks] && <span className={cn("text-xs font-medium", CHECKS[p.checks]!.cls)}>{CHECKS[p.checks]!.label}</span>}
+              {p.checks && CHECKS[p.checks] && <span className={cn("text-xs font-medium", CHECKS[p.checks]!.cls)}>{t.checks === "pipeline" ? CHECKS[p.checks]!.label.replace("Checks", "Pipeline") : CHECKS[p.checks]!.label}</span>}
               {canEdit && (
-                <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular PR #${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
+                <button className="rounded p-1 text-muted-foreground hover:text-destructive" aria-label={`Desvincular ${t.prShort} ${t.ref}${p.number}`} onClick={() => unlinkPull.mutate(p.number)}>
                   <Link2Off className="size-3.5" />
                 </button>
               )}
@@ -255,7 +257,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
       <Deployments items={data.deployments ?? []} lastProd={data.lastProductionDeployAt} />
       {canEdit && (
         <div className="mt-2">
-          <NumberForm label="Vincular un pull request" placeholder="N.º de PR" value={pullNumber} onChange={setPullNumber} loading={linkPull.isPending} onSubmit={(n) => linkPull.mutate(n, { onSuccess: () => setPullNumber("") })} />
+          <NumberForm label={`Vincular un ${t.pr}`} placeholder={`N.º de ${t.prShort}`} value={pullNumber} onChange={setPullNumber} loading={linkPull.isPending} onSubmit={(n) => linkPull.mutate(n, { onSuccess: () => setPullNumber("") })} />
         </div>
       )}
     </section>

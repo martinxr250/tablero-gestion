@@ -35,7 +35,7 @@ export function BoardSettingsDialog({ data, onClose }: { data: BoardData; onClos
           { value: "fields", label: "Campos" },
           { value: "delivery", label: "Entrega" },
           { value: "share", label: "Compartir" },
-          { value: "github", label: "GitHub" },
+          { value: "github", label: "Código" },
         ]}
       >
         <TabPanel value="general">

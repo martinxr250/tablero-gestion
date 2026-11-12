@@ -13,6 +13,7 @@ import { parseCsv, parsePasted, parseRows, type Cell, type DraftRow } from "@/li
 import type { BoardData } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
+import { vcs } from "@/lib/vcs";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 const MAX_ROWS = 200;
@@ -64,7 +65,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
   const [createIssues, setCreateIssues] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
   const [serverErrors, setServerErrors] = useState<Record<number, string>>({});
-  const repo = useQuery({ queryKey: ["board-repo", data.board.id], queryFn: () => api<{ repo: { fullName: string } | null }>(`/boards/${data.board.id}/repo`), enabled: open });
+  const repo = useQuery({ queryKey: ["board-repo", data.board.id], queryFn: () => api<{ repo: { fullName: string; provider: string } | null }>(`/boards/${data.board.id}/repo`), enabled: open });
 
   const findList = (name: string) => data.lists.find((l) => norm(l.name) === norm(name))?.id;
   const findPerson = (name: string) => {
@@ -278,7 +279,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
           {results && (
             <Alert tone="success">
               Se crearon {results.length} tareas.
-              {results.some((r) => r.issueNumber) && ` ${results.filter((r) => r.issueNumber).length} issues en GitHub.`}
+              {results.some((r) => r.issueNumber) && ` ${results.filter((r) => r.issueNumber).length} issues en ${vcs(repo.data?.repo?.provider).name}.`}
               {results.some((r) => r.error) && ` ${results.filter((r) => r.error).length} issues no se pudieron crear (ver la tabla).`}
             </Alert>
           )}

@@ -13,7 +13,7 @@ Organizá el trabajo en columnas, asigná responsables y fechas, conversá en ca
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ecf8e?logo=supabase&logoColor=white)
 ![shadcn/ui](https://img.shields.io/badge/UI-shadcn%2Fui-111?logo=shadcnui)
 ![Claude](https://img.shields.io/badge/IA-Claude-d97757)
-![Tests](https://img.shields.io/badge/tests-203-5b4ee6)
+![Tests](https://img.shields.io/badge/tests-212-5b4ee6)
 
 </div>
 
@@ -23,7 +23,7 @@ Organizá el trabajo en columnas, asigná responsables y fechas, conversá en ca
 
 Tableros es una aplicación web para organizar proyectos con el método Kanban. Cada equipo tiene su **organización**, la divide en **espacios de trabajo** (por área o cliente) y dentro de cada uno arma **tableros** con columnas y tarjetas. Cada tarjeta concentra todo lo que hace falta para avanzar: responsable, fecha, prioridad, checklist, archivos y la conversación del equipo.
 
-Además de tableros, trae **Mi trabajo** (todas tus tareas en un lugar), un **Panel del líder** con riesgos calculados, integración con **GitHub** (issues, PRs, checks y despliegues), un **Asistente IA** que actúa con tus permisos y un **Estudio de software** que diseña un sistema desde cero y lo convierte en tablero.
+Además de tableros, trae **Mi trabajo** (todas tus tareas en un lugar), un **Panel del líder** con riesgos calculados, integración con **GitHub y GitLab**, también con repos privados (issues, PRs/MRs, checks y despliegues), un **Asistente IA** que actúa con tus permisos y un **Estudio de software** que diseña un sistema desde cero y lo convierte en tablero.
 
 Está construida como un producto completo: autenticación propia, permisos por rol, aislamiento de datos entre organizaciones, auditoría, modo claro y oscuro, diseño responsive y accesibilidad por teclado. Corre de forma **gratuita** sobre Vercel + Supabase.
 
@@ -90,19 +90,20 @@ Está construida como un producto completo: autenticación propia, permisos por 
 - Registro con verificación de correo, recuperación de contraseña, verificación en dos pasos (TOTP) con códigos de recuperación.
 - Gestión de sesiones abiertas, cambio de contraseña y eliminación de cuenta.
 
-## Integración con GitHub
+## Integración con GitHub y GitLab
 
-Cada tablero puede vincularse a un repositorio (GitLab está en camino con el mismo diseño):
+Cada tablero puede vincularse a un repositorio de **GitHub** o a un proyecto de **GitLab** (gitlab.com o un GitLab propio), **públicos o privados**. Una organización puede tener cuentas de los dos proveedores a la vez.
 
-- **Conexión segura** con un token *fine-grained* guardado cifrado; nunca llega al navegador.
+- **Conexión segura** con un token guardado cifrado que nunca llega al navegador: en GitHub, un token *fine-grained*; en GitLab, un token personal, de proyecto o de grupo con alcance `api` (rol Developer o más; Maintainer para el webhook). El token es lo que da acceso a los repos privados.
 - **Importación** de los issues abiertos como tarjetas y creación de issues desde cualquier tarjeta.
 - **Sincronización bidireccional** de título, descripción (Markdown ↔ texto enriquecido), etiquetas, prioridad (como etiqueta `prioridad: …`), responsable y estado. Mover una tarjeta a la lista de terminado cierra el issue.
 - **Sin ecos ni pisadas:** cada vínculo guarda la huella local y remota del último estado; si ambos lados cambiaron, la tarjeta muestra el conflicto y una persona decide.
-- **Desarrollo en la tarjeta:** PRs que mencionan el issue (título, descripción o rama `12-…`), con estado, revisión y resultado de los checks.
+- **Desarrollo en la tarjeta:** pull requests o merge requests que mencionan el issue (título, descripción o rama `12-…`), con estado, revisión o aprobación y resultado de los checks o del pipeline.
 - **Cerrar un issue no completa la tarjeta:** se puede mover a una columna de revisión; la decisión final queda en el tablero.
-- **Despliegues:** GitHub Deployments (por ejemplo, de Vercel) vinculados a las tarjetas por evidencia; la tarjeta muestra si su código llegó a producción. Fusionado no cuenta como desplegado.
-- **Verificación con IA** de cada PR contra lo que pide la tarjeta (ver *Inteligencia artificial*).
-- **Webhooks** firmados (HMAC SHA-256) y deduplicados en producción; en local, sincronización por sondeo al abrir el tablero y cada 2 minutos.
+- **Despliegues:** GitHub Deployments (por ejemplo, de Vercel) o despliegues de GitLab CI/CD (con el *tier* del entorno) vinculados a las tarjetas por evidencia; la tarjeta muestra si su código llegó a producción. Fusionado no cuenta como desplegado.
+- **Verificación con IA** de cada PR o MR contra lo que pide la tarjeta (ver *Inteligencia artificial*).
+- **Webhooks** deduplicados en producción: firmados con HMAC SHA-256 en GitHub y con token secreto en GitLab. En local, sincronización por sondeo al abrir el tablero y cada 2 minutos.
+- **GitLab propio:** la app solo llama a gitlab.com y a los hosts que el administrador habilita en `GITLAB_HOSTS` (siempre HTTPS, sin seguir redirecciones), para que una dirección cargada por un usuario no apunte a la red interna.
 
 ## Casos de uso
 
@@ -155,7 +156,7 @@ Next.js — monolito modular
           └─ src/server/modules/*    auth · organizaciones · espacios · tableros · tarjetas · planificación
                                      mi trabajo · señales · entregas · integraciones · IA · asistente · estudio · cron
    ▼
-PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron   GitHub API   Claude API
+PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron   GitHub / GitLab API   Claude API
 ```
 
 - **El navegador solo habla con la API propia.** La base de datos, el almacenamiento y el correo se usan exclusivamente desde el servidor.
@@ -188,7 +189,7 @@ Para activar la IA, agregá `ANTHROPIC_API_KEY` a `.env.local` (sin clave, la ap
 En desarrollo los correos (verificación, invitaciones, recuperación) se guardan en `.data/mail/` y los adjuntos en `.data/uploads/`.
 
 ```bash
-pnpm test                    # tests de integración y unitarios (auth, aislamiento, permisos, kanban, GitHub, IA…)
+pnpm test                    # tests de integración y unitarios (auth, aislamiento, permisos, kanban, GitHub, GitLab, IA…)
 pnpm lint && pnpm typecheck && pnpm build
 ```
 

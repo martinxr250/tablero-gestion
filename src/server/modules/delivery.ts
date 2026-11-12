@@ -106,7 +106,7 @@ export async function evaluateCompletion(tx: Tx, board: Board, card: CardRow): P
         detail = `${plural(f.prs_total - f.prs_merged, "pull request", "pull requests")} sin fusionar`;
         break;
     }
-    if (rule.github && githubDown && !ok) detail += " (la última sincronización con GitHub falló: no se pudo verificar)";
+    if (rule.github && githubDown && !ok) detail += " (la última sincronización con el repositorio falló: no se pudo verificar)";
     out.push({ key: rule.key, label: rule.label, level, ok, detail: ok ? "" : detail });
   }
   return out;

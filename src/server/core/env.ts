@@ -23,6 +23,9 @@ const schema = z
     SMTP_PASS: z.string().optional(),
     MAIL_FROM: z.string().default("Tableros <no-reply@localhost>"),
     VIRUSTOTAL_API_KEY: z.string().optional(),
+    // GitLab self-managed permitidos además de gitlab.com (hosts separados por coma). La app solo
+    // llama a hosts de esta lista: así una URL cargada por un usuario no apunta a la red interna.
+    GITLAB_HOSTS: z.string().default(""),
     // IA (opcional): sin clave, las funciones de IA responden "no configurada".
     ANTHROPIC_API_KEY: z.string().min(20).optional(),
     AI_MODEL: z.string().default("claude-sonnet-5-5"),

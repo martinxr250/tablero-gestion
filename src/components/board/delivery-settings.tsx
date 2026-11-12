@@ -12,9 +12,9 @@ const RULES = [
   { key: "subtasks", label: "Subtareas completadas", hint: "Todas las subtareas tienen que estar terminadas." },
   { key: "dependencies", label: "Dependencias resueltas", hint: "Las tareas que la bloquean tienen que estar terminadas." },
   { key: "checklists", label: "Checklists terminados", hint: "Todos los ítems de sus checklists marcados." },
-  { key: "prApproved", label: "Pull request aprobado", hint: "Solo aplica a tarjetas con PR vinculados." },
-  { key: "ciPassing", label: "Checks de CI exitosos", hint: "Solo aplica a tarjetas con PR vinculados." },
-  { key: "prMerged", label: "Pull request fusionado", hint: "Solo aplica a tarjetas con PR vinculados." },
+  { key: "prApproved", label: "PR / MR aprobado", hint: "Solo aplica a tarjetas con pull o merge requests vinculados." },
+  { key: "ciPassing", label: "Checks o pipeline exitosos", hint: "Solo aplica a tarjetas con pull o merge requests vinculados." },
+  { key: "prMerged", label: "PR / MR fusionado", hint: "Solo aplica a tarjetas con pull o merge requests vinculados." },
 ] as const;
 
 /** Reglas para completar tarjetas: desactivada, solo informa o bloquea. */
@@ -30,7 +30,7 @@ export function DeliverySettings({ data }: { data: BoardData }) {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         Condiciones para completar una tarjeta. <strong>Bloquea</strong> impide terminarla hasta cumplirla; <strong>Informa</strong> solo avisa. La aprobación de control de calidad se configura en General.
-        Si GitHub no responde, sus reglas pasan a informar para no frenar el trabajo.
+        Si GitHub o GitLab no responden, sus reglas pasan a informar para no frenar el trabajo.
       </p>
       <ul className="divide-y rounded-2xl border">
         {RULES.map((r) => (

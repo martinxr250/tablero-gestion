@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { PRIORITY } from "@/lib/colors";
 import { ago, dueState, fmtShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { vcs } from "@/lib/vcs";
 
 type Dashboard = {
   stats: { pending: number; overdue: number; completed: number; dueSoon: number };
@@ -328,7 +329,7 @@ export default function DashboardPage() {
               {data?.activity.map((a) => (
                 <li key={a.id} className="text-sm">
                   <Link href={`/b/${a.boardId}${a.cardId ? `?card=${a.cardId}` : ""}`} className="hover:underline">
-                    <span className="font-medium">{a.actorName ?? "GitHub"}</span> <span className="text-muted-foreground">{describeActivity(a)}</span>
+                    <span className="font-medium">{a.actorName ?? vcs((a.data as { provider?: string } | null | undefined)?.provider).name}</span> <span className="text-muted-foreground">{describeActivity(a)}</span>
                   </Link>
                   <p className="text-xs text-muted-foreground">
                     {a.boardName} · {ago(a.createdAt)}

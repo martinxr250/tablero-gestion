@@ -1,4 +1,5 @@
-// Contrato común para proveedores de código. GitHub ya implementado; GitLab se suma con otro cliente.
+// Contrato común para proveedores de código (GitHub y GitLab). Cada cliente traduce su API a
+// este vocabulario, así la sincronización, las reglas y los despliegues no dependen del proveedor.
 export type RemoteIssue = {
   id: number;
   number: number;
@@ -39,6 +40,8 @@ export type RemoteDeployment = {
   environment: string;
   production: boolean | null;
   transient: boolean | null;
+  /** Tipo de entorno declarado por el proveedor (en GitLab, el "tier"); si falta, se deduce. */
+  kind?: "preview" | "staging" | "production" | "other";
   createdAt: string;
 };
 
@@ -71,7 +74,7 @@ export interface VcsClient {
   deleteWebhook(repo: string, id: number): Promise<void>;
 }
 
-/** Referencias a issues en un PR: "#12" en título/cuerpo o rama "12-algo". */
+/** Referencias a issues en un PR/MR: "#12" en título/cuerpo o rama "12-algo" (también la convención de GitLab). */
 export function referencedIssues(pull: Pick<RemotePull, "title" | "body" | "branch">): number[] {
   const nums = new Set<number>();
   for (const m of `${pull.title}\n${pull.body}`.matchAll(/(?:^|[^\w&])#(\d{1,7})\b/g)) nums.add(Number(m[1]));

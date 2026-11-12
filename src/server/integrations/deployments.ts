@@ -7,7 +7,7 @@ import { cardDeployments, deployments, type DeployState, type EnvKind } from "..
 import type { RemoteDeployment, RemoteDeploymentStatus } from "./provider";
 import type { RepoContext } from "./sync";
 
-/** Estado normalizado a partir del estado de GitHub. "inactive" = reemplazado por uno más nuevo. */
+/** Estado normalizado a partir del vocabulario común (el de GitHub; GitLab se traduce en su cliente). "inactive" = reemplazado por uno más nuevo. */
 export function normalizeDeployState(remote: string | null | undefined, previous?: DeployState): DeployState {
   switch (remote) {
     case "queued":
@@ -21,6 +21,8 @@ export function normalizeDeployState(remote: string | null | undefined, previous
     case "failure":
     case "error":
       return "failed";
+    case "canceled":
+      return "canceled";
     case "inactive":
       return previous === "deployed" ? "deployed" : "unknown";
     case undefined:
@@ -31,8 +33,9 @@ export function normalizeDeployState(remote: string | null | undefined, previous
   }
 }
 
-/** Entorno: primero los indicadores explícitos de GitHub, después el nombre. */
-export function envKindOf(d: Pick<RemoteDeployment, "environment" | "production" | "transient">): EnvKind {
+/** Entorno: primero lo que declara el proveedor, después el nombre. */
+export function envKindOf(d: Pick<RemoteDeployment, "environment" | "production" | "transient" | "kind">): EnvKind {
+  if (d.kind) return d.kind;
   if (d.production === true) return "production";
   if (d.transient === true) return "preview";
   const name = d.environment.toLowerCase();

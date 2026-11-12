@@ -29,6 +29,7 @@ import { InsightsView } from "./views/insights-view";
 import { ListView } from "./views/list-view";
 import { SprintsView } from "./views/sprints-view";
 import type { RepoInfo } from "./repo-settings";
+import { vcs } from "@/lib/vcs";
 import { plural } from "@/lib/plural";
 
 // Preferencia "resumen del tablero contraído", guardada en el navegador. Contraído por defecto.
@@ -643,7 +644,7 @@ function RepoChip({ boardId, canSync }: { boardId: string; canSync: boolean }) {
     refetchOnWindowFocus: false,
     retry: false,
   });
-  const manual = useMutation({ mutationFn: runSync, onSuccess: () => toast.success("Sincronizado con GitHub") });
+  const manual = useMutation({ mutationFn: runSync, onSuccess: () => toast.success(`Sincronizado con ${vcs(repo?.provider).name}`) });
   if (!repo) return null;
   const attention = repo.pending > 0 || repo.conflicts > 0 || !!repo.lastSyncError;
   return (
@@ -654,7 +655,7 @@ function RepoChip({ boardId, canSync }: { boardId: string; canSync: boolean }) {
       </a>
       <span className={cn("size-1.5 rounded-full", attention ? "bg-amber-500" : "bg-success")} title={repo.lastSyncError ?? (attention ? "Hay cambios pendientes o conflictos" : "Sincronizado")} />
       {canSync && (
-        <button className="rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label="Sincronizar con GitHub" title={repo.lastSyncedAt ? `Última sincronización ${ago(repo.lastSyncedAt)}` : "Sincronizar"} onClick={() => manual.mutate()}>
+        <button className="rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Sincronizar con ${vcs(repo.provider).name}`} title={repo.lastSyncedAt ? `Última sincronización ${ago(repo.lastSyncedAt)}` : "Sincronizar"} onClick={() => manual.mutate()}>
           <RefreshCw className={cn("size-3.5", manual.isPending && "animate-spin")} />
         </button>
       )}

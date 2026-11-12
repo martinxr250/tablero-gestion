@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 import { decrypt, sha256 } from "../core/crypto";
+import { env } from "../core/env";
 import { AppError } from "../core/errors";
 import { uuidv7 } from "../core/ids";
 import { logger } from "../core/logger";
@@ -24,6 +25,7 @@ import { COLORS, notify } from "../modules/shared";
 import { sanitizeRichText } from "../modules/richtext";
 import { syncDeployments } from "./deployments";
 import { GitHubClient } from "./github";
+import { GITLAB_API, GitLabClient } from "./gitlab";
 import { docToMarkdown, markdownToDoc } from "./markdown";
 import { referencedIssues, type RemoteIssue, type RemotePull, type VcsClient } from "./provider";
 
@@ -60,8 +62,28 @@ type Fields = { title: string; body: string; state: "open" | "closed"; labels: s
 const fingerprint = (f: Fields) =>
   sha256(JSON.stringify({ ...f, body: f.body.trim(), labels: [...f.labels].sort(), assignees: [...f.assignees].sort() })).slice(0, 32);
 
-export function clientFor(conn: { provider: string; tokenEnc: string }): VcsClient {
+/**
+ * URL de la API de GitLab permitida: gitlab.com o un host de GITLAB_HOSTS, siempre con HTTPS.
+ * Se vuelve a validar al usar la conexión (por si la lista cambió).
+ */
+export function gitlabApiBase(input?: string | null) {
+  const raw = (input ?? "").trim() || GITLAB_API;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new AppError(400, "bad_request", "La dirección de GitLab no es válida");
+  }
+  const allowed = new Set(["gitlab.com", ...env().GITLAB_HOSTS.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean)]);
+  if (url.protocol !== "https:" || url.username || url.password || url.port || !allowed.has(url.hostname.toLowerCase())) {
+    throw new AppError(400, "bad_request", `GitLab en ${url.hostname} no está habilitado. Quien administra el servidor puede agregarlo a GITLAB_HOSTS (solo HTTPS).`);
+  }
+  return `https://${url.hostname.toLowerCase()}/api/v4`;
+}
+
+export function clientFor(conn: { provider: string; tokenEnc: string; apiBaseUrl?: string | null }): VcsClient {
   if (conn.provider === "github") return new GitHubClient(decrypt(conn.tokenEnc));
+  if (conn.provider === "gitlab") return new GitLabClient(decrypt(conn.tokenEnc), gitlabApiBase(conn.apiBaseUrl));
   throw new AppError(501, "not_implemented", "Este proveedor todavía no está disponible");
 }
 
