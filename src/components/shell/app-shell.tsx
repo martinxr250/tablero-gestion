@@ -14,7 +14,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandWordmark, Logo } from "@/components/ui/logo";
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/overlay";
+import { Dialog, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/overlay";
 import { Button } from "@/components/ui/primitives";
 import { Avatar } from "@/components/ui/user-avatar";
 import { api } from "@/lib/api";
@@ -111,7 +111,7 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
         )}
         aria-label="Navegación principal"
       >
-        <Sidebar user={user} mini={mini} onClose={() => setNavOpen(false)} />
+        <Sidebar mini={mini} onClose={() => setNavOpen(false)} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-sidebar px-4 sm:px-6">
@@ -175,11 +175,10 @@ function NavLink({ href, icon: Icon, label, active, mini }: { href: string; icon
   );
 }
 
-function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onClose: () => void }) {
+function Sidebar({ mini, onClose }: { mini: boolean; onClose: () => void }) {
   const { me, orgId, currentOrg, setOrgId } = useOrg();
   const pathname = usePathname();
   const router = useRouter();
-  const qc = useQueryClient();
   const prefetchBoard = usePrefetchBoard();
   const { data: tree } = useQuery({
     queryKey: ["workspaces", orgId],
@@ -188,12 +187,7 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
   });
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  async function logout() {
-    await api("/auth/logout", { method: "POST" }).catch(() => {});
-    qc.clear();
-    router.replace("/login");
-    router.refresh();
-  }
+  const logout = useLogoutConfirm();
 
   return (
     <div className="flex h-full flex-col">
@@ -346,7 +340,7 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
             mini && "md:mt-3 md:flex-col md:gap-3 md:border-0 md:p-0",
           )}
         >
-          <button onClick={logout} className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Salir" title="Salir">
+          <button onClick={logout.ask} className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Salir" title="Salir">
             <LogOut className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Salir</span>
           </button>
           {orgId && currentOrg?.role !== "guest" && (
@@ -363,10 +357,8 @@ function Sidebar({ user, mini, onClose }: { user: ShellUser; mini: boolean; onCl
               <Settings className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Ajustes</span>
             </Link>
           )}
-          <Link href="/settings" className={cn("inline-flex items-center gap-1.5 hover:text-foreground", mini && "md:size-11 md:justify-center md:rounded-full md:bg-sidebar-accent")} aria-label="Mi cuenta" title={user.email}>
-            <UserRound className="size-3.5" /> <span className={cn(mini && "md:hidden")}>Mi cuenta</span>
-          </Link>
         </div>
+        {logout.dialog}
       </div>
     </div>
   );
@@ -387,17 +379,39 @@ function ThemeToggle() {
   );
 }
 
-function UserMenu({ user }: { user: ShellUser }) {
+/** Cerrar sesión siempre pide confirmación: `ask` abre el modal y `dialog` se renderiza donde se use. */
+function useLogoutConfirm() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { me } = useOrg();
-  const u = me?.user ?? user;
+  const [open, setOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   async function logout() {
+    setLeaving(true);
     await api("/auth/logout", { method: "POST" }).catch(() => {});
     qc.clear();
     router.replace("/login");
     router.refresh();
   }
+  const dialog = open ? (
+    <Dialog open onOpenChange={(o) => !leaving && setOpen(o)} title="¿Cerrar sesión?" description="Vas a salir de Tableros en este dispositivo. Para volver a entrar vas a necesitar tu correo y tu contraseña.">
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" disabled={leaving} onClick={() => setOpen(false)}>
+          Cancelar
+        </Button>
+        <Button variant="danger" loading={leaving} onClick={logout}>
+          <LogOut /> Cerrar sesión
+        </Button>
+      </div>
+    </Dialog>
+  ) : null;
+  return { ask: () => setOpen(true), dialog };
+}
+
+function UserMenu({ user }: { user: ShellUser }) {
+  const router = useRouter();
+  const { me } = useOrg();
+  const u = me?.user ?? user;
+  const logout = useLogoutConfirm();
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -416,10 +430,11 @@ function UserMenu({ user }: { user: ShellUser }) {
           <UserRound /> Mi cuenta
         </MenuItem>
         <MenuSeparator />
-        <MenuItem danger onSelect={logout}>
+        <MenuItem danger onSelect={logout.ask}>
           <LogOut /> Cerrar sesión
         </MenuItem>
       </MenuContent>
+      {logout.dialog}
     </Menu>
   );
 }
