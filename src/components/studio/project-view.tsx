@@ -10,7 +10,7 @@ import { AiError, AiMark, AiNote, AiThinking } from "@/components/ai/ai-kit";
 import { DocBody } from "@/components/studio/doc-views";
 import { MermaidDiagram } from "@/components/studio/mermaid-diagram";
 import { Dialog, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/overlay";
-import { Button, ErrorState, Field, Input, Skeleton, Textarea } from "@/components/ui/primitives";
+import { Button, ErrorState, Field, Input, Skeleton, Spinner, Textarea } from "@/components/ui/primitives";
 import { useAiEnabled } from "@/lib/ai";
 import { api } from "@/lib/api";
 import { KINDS, PIPELINE, type DesignDoc, type DesignKind, type DesignProject } from "@/lib/design";
@@ -233,10 +233,10 @@ function PipelineProgress({ steps, running, onClose, onCancel }: { steps: Step[]
   return (
     <section className="ai-surface mb-6 rounded-3xl p-5" aria-label="Progreso de la generación">
       <div className="flex flex-wrap items-center gap-3">
-        <AiMark pulse={running} />
+        {running ? <Spinner className="size-6 text-[var(--ai-via)]" /> : <AiMark />}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">{running ? "Generando el diseño…" : failed ? "La generación se detuvo" : "Diseño generado"}</p>
-          <p className={cn("text-xs", running ? "ai-shimmer" : "text-muted-foreground")}>{current ? KINDS[current.kind].step : `${done} de ${steps.length} documentos`}</p>
+          <p className="text-xs text-muted-foreground">{current ? KINDS[current.kind].step : `${done} de ${steps.length} documentos`}</p>
         </div>
         {running ? (
           <Button size="sm" variant="ghost" onClick={onCancel}>
@@ -256,7 +256,7 @@ function PipelineProgress({ steps, running, onClose, onCancel }: { steps: Step[]
           const K = KINDS[s.kind];
           return (
             <li key={i} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs", s.status === "done" && "border-success/30 text-success", s.status === "running" && "ai-soft border-[color-mix(in_oklch,var(--ai-via)_45%,var(--border))]", s.status === "waiting" && "text-muted-foreground", s.status === "error" && "border-destructive/40 text-destructive")}>
-              {s.status === "done" ? <Check className="size-3" /> : <K.icon className={cn("size-3", s.status === "running" && "ai-pulse")} />}
+              {s.status === "done" ? <Check className="size-3" /> : s.status === "running" ? <Spinner className="size-3 text-current" /> : <K.icon className="size-3" />}
               {K.short}
             </li>
           );

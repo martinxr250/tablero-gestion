@@ -3,7 +3,7 @@
 import { AlertTriangle, Download, Maximize2, Minus, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/overlay";
-import { Button } from "@/components/ui/primitives";
+import { Button, Skeleton } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
 let ready: Promise<typeof import("mermaid").default> | null = null;
@@ -140,7 +140,7 @@ export function MermaidDiagram({ source, title, className }: { source: string; t
       ) : svg ? (
         canvas(false)
       ) : (
-        <div className="ai-skeleton m-6 h-48 rounded-2xl" />
+        <Skeleton className="m-6 h-48" />
       )}
       {full && (
         <Dialog open onOpenChange={setFull} title={title} wide className="sm:max-w-[95vw]">

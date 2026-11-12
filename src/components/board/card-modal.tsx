@@ -59,10 +59,7 @@ export function CardModal({ cardId, board: viewBoard, onClose, onOpenCard }: { c
       {q.error ? (
         <p className="text-sm text-destructive">{q.error instanceof ApiError && q.error.status === 404 ? "La tarjeta no existe o no tenés acceso." : (q.error as Error).message}</p>
       ) : !card || loadingSource ? (
-        <div className="space-y-3">
-          <Skeleton className="h-6 w-1/3" />
-          <Skeleton className="h-32" />
-        </div>
+        <Skeleton className="h-40" />
       ) : (
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
           {/* Cada sección es una tarjeta propia sobre el fondo del modal: así se distingue qué es qué. */}

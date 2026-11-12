@@ -8,7 +8,6 @@ import { Card as UiCard } from "@/components/ui/card";
 import { Input as UiInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Skeleton as UiSkeleton } from "@/components/ui/skeleton";
 import { Textarea as UiTextarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Illustration, type IllustrationKind } from "@/components/ui/illustration";
@@ -97,7 +96,15 @@ export const Spinner = ({ className }: { className?: string }) => (
   <Loader2 className={cn("size-5 animate-spin text-muted-foreground", className)} aria-label="Cargando" />
 );
 
-export const Skeleton = ({ className }: { className?: string }) => <UiSkeleton className={cn("rounded-2xl", className)} />;
+/**
+ * Estado de carga: un spinner centrado que reserva el mismo espacio que el contenido que viene
+ * (así nada salta al llegar la respuesta). Sin bloques grises que parpadean.
+ */
+export const Skeleton = ({ className }: { className?: string }) => (
+  <div role="status" aria-label="Cargando" className={cn("flex items-center justify-center", className)}>
+    <Spinner className="size-5 text-muted-foreground" />
+  </div>
+);
 
 export function Card({ className, ...props }: ComponentProps<"div">) {
   return <UiCard className={cn("premium-card gap-0 rounded-[2rem] py-0 shadow-card ring-0", className)} {...props} />;

@@ -44,11 +44,7 @@ export function StudioHome() {
       {q.error ? (
         <ErrorState error={q.error} retry={q.refetch} />
       ) : !q.data ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-44" />
-          ))}
-        </div>
+        <Skeleton className="h-44" />
       ) : q.data.projects.length === 0 ? (
         <div className="ai-surface rounded-[2rem] p-8 text-center sm:p-12">
           <AiMark size="lg" className="mx-auto" />

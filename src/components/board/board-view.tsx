@@ -235,11 +235,7 @@ export function BoardView({ boardId }: { boardId: string }) {
   }
   if (!q.data) {
     return (
-      <div className="flex gap-4 p-6">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-96 w-72" />
-        ))}
-      </div>
+      <Skeleton className="h-96" />
     );
   }
 

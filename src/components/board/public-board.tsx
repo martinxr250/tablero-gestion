@@ -120,11 +120,7 @@ export function PublicBoard({ token }: { token: string }) {
           )}
         </div>
       ) : !q.data ? (
-        <div className="flex gap-4 p-6">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-96 w-[19rem]" />
-          ))}
-        </div>
+        <Skeleton className="h-96" />
       ) : (
         <CardFieldsContext value={q.data.fields}>
         <main className="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto p-4 scroll-thin sm:p-6">

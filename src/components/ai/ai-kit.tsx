@@ -2,7 +2,7 @@
 
 import { AlertTriangle, RotateCcw, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/primitives";
+import { Button, Spinner } from "@/components/ui/primitives";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +19,8 @@ export function AiMark({ size = "md", pulse, className }: { size?: "sm" | "md" |
 }
 
 /** Espera mientras la IA trabaja: mensajes que avanzan y renglones de muestra. */
-export function AiThinking({ steps, lines = 3, compact, icon = true, className }: { steps: string[]; lines?: number; compact?: boolean; icon?: boolean; className?: string }) {
+/** Espera de la IA: un spinner y el paso actual (sin barras ni textos que parpadean). `lines` se conserva por compatibilidad. */
+export function AiThinking({ steps, compact, className }: { steps: string[]; lines?: number; compact?: boolean; className?: string }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (steps.length < 2) return;
@@ -28,19 +29,10 @@ export function AiThinking({ steps, lines = 3, compact, icon = true, className }
   }, [steps.length]);
   return (
     <div className={cn("space-y-3", className)} role="status" aria-live="polite">
-      <div className="flex items-center gap-3">
-        {icon && <AiMark size={compact ? "sm" : "md"} pulse />}
-        <p key={i} className="ai-shimmer ai-reveal text-sm font-medium">
-          {steps[i]}
-        </p>
+      <div className={cn("flex items-center gap-3", !compact && "py-1")}>
+        <Spinner className={cn("shrink-0 text-[var(--ai-via)]", compact ? "size-4" : "size-5")} />
+        <p className="text-sm font-medium text-muted-foreground">{steps[i]}</p>
       </div>
-      {lines > 0 && (
-        <div className="space-y-2 pl-1" aria-hidden>
-          {Array.from({ length: lines }, (_, n) => (
-            <div key={n} className="ai-skeleton h-2.5" style={{ width: `${[92, 78, 64, 85, 55][n % 5]}%`, animationDelay: `${n * 120}ms` }} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
