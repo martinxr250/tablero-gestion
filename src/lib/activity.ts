@@ -50,6 +50,7 @@ export function describeActivity(a: Pick<Activity, "action" | "data">): string {
     case "card.completion_blocked": return `intentó completar "${t}" con condiciones pendientes`;
     case "vcs.issue_linked": return `vinculó "${t}" con el issue #${s(d.number)}`;
     case "vcs.pull_linked": return `vinculó el PR #${s(d.number)} a "${t}"`;
+    case "vcs.pull_ai_review": return `verificó con IA si el PR #${s(d.number)} cumple "${t}"`;
     case "board_file.added": return `subió el archivo "${s(d.file)}"`;
     case "board_file.deleted": return `eliminó el archivo "${s(d.file)}"`;
     case "board_file.summarized": return `resumió con IA "${s(d.file)}"`;

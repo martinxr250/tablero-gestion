@@ -6,13 +6,14 @@
 
 **Gestión de proyectos y tareas con tableros Kanban, pensada para equipos chicos.**
 
-Organizá el trabajo en columnas, asigná responsables y fechas, conversá en cada tarea y seguí el avance del equipo desde un solo lugar.
+Organizá el trabajo en columnas, asigná responsables y fechas, conversá en cada tarea y seguí el avance del equipo desde un solo lugar. Con IA que lee tus documentos, responde sobre el tablero y verifica si el código cumple lo que pide cada tarea.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ecf8e?logo=supabase&logoColor=white)
 ![shadcn/ui](https://img.shields.io/badge/UI-shadcn%2Fui-111?logo=shadcnui)
-![Tests](https://img.shields.io/badge/tests-50%20integración-5b4ee6)
+![Claude](https://img.shields.io/badge/IA-Claude-d97757)
+![Tests](https://img.shields.io/badge/tests-203-5b4ee6)
 
 </div>
 
@@ -21,6 +22,8 @@ Organizá el trabajo en columnas, asigná responsables y fechas, conversá en ca
 ## ¿Qué es?
 
 Tableros es una aplicación web para organizar proyectos con el método Kanban. Cada equipo tiene su **organización**, la divide en **espacios de trabajo** (por área o cliente) y dentro de cada uno arma **tableros** con columnas y tarjetas. Cada tarjeta concentra todo lo que hace falta para avanzar: responsable, fecha, prioridad, checklist, archivos y la conversación del equipo.
+
+Además de tableros, trae **Mi trabajo** (todas tus tareas en un lugar), un **Panel del líder** con riesgos calculados, integración con **GitHub** (issues, PRs, checks y despliegues), un **Asistente IA** que actúa con tus permisos y un **Estudio de software** que diseña un sistema desde cero y lo convierte en tablero.
 
 Está construida como un producto completo: autenticación propia, permisos por rol, aislamiento de datos entre organizaciones, auditoría, modo claro y oscuro, diseño responsive y accesibilidad por teclado. Corre de forma **gratuita** sobre Vercel + Supabase.
 
@@ -44,11 +47,17 @@ Está construida como un producto completo: autenticación propia, permisos por 
 - Columnas y tarjetas con arrastrar y soltar (mouse y teclado), reordenamiento de columnas y colores por lista.
 - Filtros por persona, etiqueta, prioridad y vencimiento; barra de progreso del tablero.
 - Archivado y restauración de listas y tarjetas.
+- Vistas de **tablero, lista, calendario, etapas, panel del líder y archivos**.
+- **Campos personalizados** (texto, número, moneda, fecha, casilla, lista de opciones), **plantillas** de tablero, carga masiva de tareas y exportación a CSV.
+- **Tarjetas espejo:** una misma tarea en varios tableros con la información sincronizada.
+- **Enlaces para compartir** el tablero en solo lectura, sin cuenta.
 
 **Tarjetas**
 - Descripción con texto enriquecido, prioridad, responsable, colaboradores, etiquetas y fecha de vencimiento.
 - Checklists con progreso, archivos adjuntos (imágenes, PDF, Office, texto), relaciones entre tareas (bloquea, relacionada, duplica).
 - Comentarios con **@menciones** e historial completo de cambios.
+- Subtareas, tareas recurrentes, seguimiento, duplicado y control de calidad (aprobar o rechazar).
+- **Reglas de cierre** por tablero: por ejemplo, no completar con subtareas, checklist o PRs pendientes.
 
 **Colaboración**
 - Organizaciones, espacios de trabajo y tableros con roles y **invitaciones por correo**.
@@ -56,9 +65,26 @@ Está construida como un producto completo: autenticación propia, permisos por 
 - Actualización casi en tiempo real: los cambios de otras personas aparecen solos y se resaltan.
 - Panel de actividad por tablero y registro de auditoría por organización.
 
-**Seguimiento**
+**Planificación y seguimiento**
+- **Mi trabajo:** tus tareas de todos los tableros agrupadas por estado, un planificador y una bandeja personal de notas rápidas que se convierten en tarjetas.
+- **Etapas** (sprints) con estimación en puntos, capacidad por persona y riesgo de retraso según el ritmo histórico.
+- **Panel del líder:** riesgos calculados con datos reales (cada uno con causa, impacto y acción recomendada), carga contra capacidad, dependencias críticas y salud de las entregas.
 - Inicio con tareas pendientes, vencidas, por vencer y completadas, gráfico de ritmo semanal, tableros activos y actividad reciente.
 - Búsqueda global (⌘K) y búsqueda avanzada por organización, espacio, tablero, persona, estado, prioridad y fecha.
+
+**Inteligencia artificial (Claude)**
+- **Tareas desde documentos:** subís un PDF, imagen o texto (o lo pegás) y la IA propone tareas con prioridad, fecha, responsable y subtareas; nada se crea sin tu revisión.
+- **Explicar una tarjeta:** resume la tarea, sus comentarios y adjuntos, marca riesgos y sugiere subtareas y checklist para agregar con un clic.
+- **Preguntale al tablero:** respuestas en lenguaje natural con enlaces a las tarjetas, solo con lo que cada persona puede ver.
+- **Resumen del líder:** el estado del tablero en un minuto, escrito a partir de los indicadores (no lee descripciones ni comentarios).
+- **¿Cumple el PR lo que pide la tarjeta?:** lee los cambios del PR vinculado y verifica cada requisito de la tarjeta (descripción, checklist, subtareas) con evidencia y archivos; avisa si el PR cambió después de verificarlo.
+- **Asistente IA:** conversación que consulta y propone cambios (crear, mover, asignar, comentar…); cada cambio se muestra y se ejecuta solo si lo confirmás, con tus permisos.
+- **Resúmenes de archivos** del tablero, guardados para todo el equipo.
+- Tope mensual de consumo por organización y registro de uso.
+
+**Estudio de software**
+- Desde una idea, la IA genera visión, requisitos, casos de uso, diagramas (Mermaid), arquitectura y plan del proyecto; cada documento se puede editar a mano o pedirle cambios a la IA.
+- El plan se convierte en un tablero con una etapa por fase y tareas estimadas. Exportación completa en Markdown.
 
 **Cuenta y seguridad**
 - Registro con verificación de correo, recuperación de contraseña, verificación en dos pasos (TOTP) con códigos de recuperación.
@@ -74,9 +100,11 @@ Cada tablero puede vincularse a un repositorio (GitLab está en camino con el mi
 - **Sin ecos ni pisadas:** cada vínculo guarda la huella local y remota del último estado; si ambos lados cambiaron, la tarjeta muestra el conflicto y una persona decide.
 - **Desarrollo en la tarjeta:** PRs que mencionan el issue (título, descripción o rama `12-…`), con estado, revisión y resultado de los checks.
 - **Cerrar un issue no completa la tarjeta:** se puede mover a una columna de revisión; la decisión final queda en el tablero.
+- **Despliegues:** GitHub Deployments (por ejemplo, de Vercel) vinculados a las tarjetas por evidencia; la tarjeta muestra si su código llegó a producción. Fusionado no cuenta como desplegado.
+- **Verificación con IA** de cada PR contra lo que pide la tarjeta (ver *Inteligencia artificial*).
 - **Webhooks** firmados (HMAC SHA-256) y deduplicados en producción; en local, sincronización por sondeo al abrir el tablero y cada 2 minutos.
 
-
+## Casos de uso
 
 - **Equipo de marketing** que planifica una campaña: columnas *Por hacer / En curso / Revisión / Hecho*, piezas con fecha de entrega, checklist de entregables y archivos adjuntos.
 - **Grupo de amigos o estudio chico** que organiza un proyecto en común: cada uno ve sus tareas en el inicio y recibe aviso cuando lo mencionan o algo está por vencer.
@@ -101,7 +129,8 @@ En cada tablero: **Administrador** (configura y gestiona miembros) · **Editor**
 |---|---|
 | Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript estricto |
 | Interfaz | [shadcn/ui](https://ui.shadcn.com) (Radix) · Tailwind CSS v4 · [lucide-react](https://lucide.dev) · Plus Jakarta Sans |
-| Interacción | [dnd-kit](https://dndkit.com) (drag & drop accesible) · [TipTap](https://tiptap.dev) (texto enriquecido) · [Recharts](https://recharts.org) · cmdk |
+| Interacción | [dnd-kit](https://dndkit.com) (drag & drop accesible) · [TipTap](https://tiptap.dev) (texto enriquecido) · [Recharts](https://recharts.org) · cmdk · [Mermaid](https://mermaid.js.org) |
+| IA | [Claude](https://www.anthropic.com/claude) (Sonnet 5.5) con el SDK de Anthropic · salidas estructuradas validadas con Zod · herramientas con confirmación |
 | Datos en cliente | TanStack Query |
 | Base de datos | PostgreSQL ([Supabase](https://supabase.com)) · [Drizzle ORM](https://orm.drizzle.team) · migraciones SQL versionadas |
 | Autenticación | JWT propio con [jose](https://github.com/panva/jose) (Ed25519) · Argon2id · TOTP (otplib) |
@@ -123,9 +152,10 @@ Next.js — monolito modular
    ├─ app/(auth), app/(app)          pantallas
    └─ app/api/v1/[...path]            API única → src/server/api/router.ts
           CSRF · autenticación · rate limit · validación · errores seguros · OpenAPI
-          └─ src/server/modules/*    auth · perfil · organizaciones · espacios · tableros · tarjetas · dashboard · cron
+          └─ src/server/modules/*    auth · organizaciones · espacios · tableros · tarjetas · planificación
+                                     mi trabajo · señales · entregas · integraciones · IA · asistente · estudio · cron
    ▼
-PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron
+PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron   GitHub API   Claude API
 ```
 
 - **El navegador solo habla con la API propia.** La base de datos, el almacenamiento y el correo se usan exclusivamente desde el servidor.
@@ -140,6 +170,7 @@ PostgreSQL (esquema app + RLS)   Storage privado   SMTP   Vercel Cron
 - Protección CSRF (cookies `SameSite` + validación de `Origin`), CSP estricta, validación de toda entrada y texto enriquecido con lista blanca (sin HTML).
 - Adjuntos validados por su contenido real, con tamaño máximo, nombres saneados, almacenamiento privado y descarga solo con permiso.
 - Auditoría inmutable de eventos sensibles; los logs nunca guardan contraseñas, tokens ni cookies.
+- **IA:** la clave vive solo en el servidor; los documentos, PRs y comentarios se tratan como datos (no como instrucciones); las respuestas se validan por esquema y se recortan; el asistente nunca cambia nada sin confirmación y actúa con los permisos de la persona; hay tope mensual por organización.
 - Políticas de retención automáticas y CI que bloquea vulnerabilidades altas o críticas.
 
 ## Empezar en local
@@ -152,10 +183,12 @@ pnpm run setup:dev   # genera .env.local con claves nuevas, levanta Postgres y m
 pnpm dev             # http://localhost:3000
 ```
 
+Para activar la IA, agregá `ANTHROPIC_API_KEY` a `.env.local` (sin clave, la app funciona igual y oculta esas funciones).
+
 En desarrollo los correos (verificación, invitaciones, recuperación) se guardan en `.data/mail/` y los adjuntos en `.data/uploads/`.
 
 ```bash
-pnpm test                    # tests de integración (auth, aislamiento, permisos, kanban, archivos)
+pnpm test                    # tests de integración y unitarios (auth, aislamiento, permisos, kanban, GitHub, IA…)
 pnpm lint && pnpm typecheck && pnpm build
 ```
 

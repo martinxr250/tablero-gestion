@@ -6,6 +6,7 @@ import { badRequest } from "../core/errors";
 import { withUser, type Tx } from "../db/client";
 import { boardCapacity } from "../db/schema";
 import { boardAccess } from "./access";
+import { plural } from "@/lib/plural";
 
 // Indicadores determinísticos del tablero (sin IA). Cada resultado trae su explicación y,
 // si faltan datos, lo dice en lugar de inventar un valor.
@@ -20,6 +21,14 @@ const today = () => new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z
 const days = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / DAY);
 
 /** Riesgo de una etapa: puntos restantes contra días restantes y ritmo (histórico o capacidad). */
+/** Severidad de las vencidas según cuánto del trabajo abierto representan, no solo la cantidad. */
+export function overdueSeverity(overdue: number, open: number): 1 | 2 | 3 {
+  const share = open ? overdue / open : 0;
+  if (share >= 0.3 || overdue >= 10) return 3;
+  if (share >= 0.1 || overdue >= 3) return 2;
+  return 1;
+}
+
 export async function sprintRisk(tx: Tx, boardId: string) {
   const sprintRows = await tx.execute<{
     id: string; name: string; status: string; starts_on: string; ends_on: string; capacity_points: string | null;
@@ -59,7 +68,7 @@ export async function sprintRisk(tx: Tx, boardId: string) {
     let perDay: number | null = null;
     if (histPerDay) {
       perDay = histPerDay;
-      basis = `ritmo histórico de ${hist!.n} etapa(s) cerrada(s) (${histPerDay.toFixed(1)} pts/día)`;
+      basis = `ritmo histórico de ${plural(hist!.n, "etapa cerrada", "etapas cerradas")} (${histPerDay.toFixed(1)} pts/día)`;
     } else if (s.capacity_points !== null) {
       perDay = Number(s.capacity_points) / length;
       basis = `capacidad de la etapa (${Number(s.capacity_points)} pts en ${length} días)`;
@@ -76,16 +85,16 @@ export async function sprintRisk(tx: Tx, boardId: string) {
       const doable = perDay * left;
       const ratio = doable > 0 ? remaining / doable : Infinity;
       level = ratio > 1.1 ? "high" : ratio > 0.8 ? "medium" : "low";
-      reasons.push(left === 0 ? `Terminó el plazo y quedan ${remaining} pts.` : `Quedan ${remaining} pts y, según el ${basis}, en ${left} día(s) se completarían unos ${doable.toFixed(0)}.`);
+      reasons.push(left === 0 ? `Terminó el plazo y quedan ${remaining} pts.` : `Quedan ${remaining} pts y, según el ${basis}, en ${plural(left, "día", "días")} se completarían unos ${doable.toFixed(0)}.`);
     } else {
       reasons.push("No quedan puntos pendientes.");
     }
     if (s.blocked > 0) {
-      reasons.push(`${s.blocked} tarea(s) bloqueada(s).`);
+      reasons.push(`${plural(s.blocked, "tarea bloqueada", "tareas bloqueadas")}.`);
       if (level === "low") level = "medium";
     }
-    if (s.overdue > 0) reasons.push(`${s.overdue} tarea(s) vencida(s).`);
-    if (s.unestimated > 0 && level !== "insufficient") reasons.push(`${s.unestimated} tarea(s) sin estimar: el riesgo real puede ser mayor.`);
+    if (s.overdue > 0) reasons.push(`${plural(s.overdue, "tarea vencida", "tareas vencidas")}.`);
+    if (s.unestimated > 0 && level !== "insufficient") reasons.push(`${plural(s.unestimated, "tarea", "tareas")} sin estimar: el riesgo real puede ser mayor.`);
     return { id: s.id, name: s.name, status: s.status, endsOn: s.ends_on, level, reasons, remainingPoints: remaining, daysLeft: left };
   });
 }
@@ -205,26 +214,38 @@ export async function boardSignals(tx: Tx, board: Board) {
     select c.id, c.title, d.external_id as number from app.card_dev_refs d join app.cards c on c.id = d.card_id
     where c.board_id = ${board.id} and d.kind = 'pr' and d.checks_status = 'failure' and not d.merged and c.completed_at is null limit 10`);
   if (failing.length) {
-    risks.push({ severity: 2, problem: `${failing.length} pull request(s) con CI fallida`, project: board.name, tasks: failing.map((f) => ({ id: f.id, title: `${f.title} (#${f.number})` })), cause: "Los checks automáticos no pasan.", impact: "No se pueden aprobar ni fusionar.", action: "Revisar los checks en GitHub y corregir." });
+    risks.push({ severity: 2, problem: `${plural(failing.length, "pull request", "pull requests")} con CI fallida`, project: board.name, tasks: failing.map((f) => ({ id: f.id, title: `${f.title} (#${f.number})` })), cause: "Los checks automáticos no pasan.", impact: "No se pueden aprobar ni fusionar.", action: "Revisar los checks en GitHub y corregir." });
   }
   const stale = await tx.execute<{ id: string; title: string; number: string }>(sql`
     select c.id, c.title, d.external_id as number from app.card_dev_refs d join app.cards c on c.id = d.card_id
     where c.board_id = ${board.id} and d.kind = 'pr' and d.state = 'open' and not d.draft
       and coalesce(d.review_status, '') not in ('approved', 'changes_requested') and d.remote_updated_at < now() - interval '2 days' limit 10`);
   if (stale.length) {
-    risks.push({ severity: 1, problem: `${stale.length} pull request(s) esperan revisión hace más de 2 días`, project: board.name, tasks: stale.map((f) => ({ id: f.id, title: `${f.title} (#${f.number})` })), cause: "Nadie revisó todavía.", impact: "El código queda detenido.", action: "Asignar quién revisa." });
+    risks.push({ severity: 1, problem: stale.length === 1 ? "1 pull request espera revisión hace más de 2 días" : `${stale.length} pull requests esperan revisión hace más de 2 días`, project: board.name, tasks: stale.map((f) => ({ id: f.id, title: `${f.title} (#${f.number})` })), cause: "Nadie revisó todavía.", impact: "El código queda detenido.", action: "Asignar quién revisa." });
   }
   for (const p of people.filter((x) => x.status === "over")) {
     risks.push({ severity: 2, problem: `${p.name} está sobrecargado`, project: board.name, tasks: [], cause: `${p.points} pts asignados con capacidad de ${p.capacity} pts${p.unestimated ? ` (más ${p.unestimated} sin estimar)` : ""}.`, impact: "Sus tareas pueden atrasarse.", action: "Redistribuir tareas o ajustar la capacidad." });
   }
   const failedDeploys = deploy.filter((d) => d.status === "failed");
   if (failedDeploys.length) {
-    risks.push({ severity: 3, problem: `${failedDeploys.length} entrega(s) con despliegue a producción fallido`, project: board.name, tasks: failedDeploys.slice(0, 10).map((d) => ({ id: d.id, title: d.title })), cause: "El último despliegue a producción que incluye su código falló.", impact: "El cambio no llegó a los usuarios.", action: "Revisar el despliegue y volver a publicar." });
+    risks.push({ severity: 3, problem: `${plural(failedDeploys.length, "entrega", "entregas")} con despliegue a producción fallido`, project: board.name, tasks: failedDeploys.slice(0, 10).map((d) => ({ id: d.id, title: d.title })), cause: "El último despliegue a producción que incluye su código falló.", impact: "El cambio no llegó a los usuarios.", action: "Revisar el despliegue y volver a publicar." });
   }
   const overdue = await tx.execute<{ id: string; title: string }>(sql`
     select id, title from app.cards where board_id = ${board.id} and archived_at is null and completed_at is null and due_at < now() order by due_at limit 10`);
   if (overdue.length) {
-    risks.push({ severity: 1, problem: `${summary!.overdue} tarea(s) vencida(s)`, project: board.name, tasks: overdue, cause: "Pasó la fecha de vencimiento.", impact: "Posible retraso de la entrega.", action: "Replanificar fechas o reasignar." });
+    const n = Number(summary!.overdue);
+    const open = Math.max(n, Number(summary!.total) - Number(summary!.done));
+    const share = open ? n / open : 0;
+    const pct = Math.round(share * 100);
+    risks.push({
+      severity: overdueSeverity(n, open),
+      problem: plural(n, "tarea vencida", "tareas vencidas"),
+      project: board.name,
+      tasks: overdue,
+      cause: `${n === 1 ? "Pasó la fecha de vencimiento de 1" : `Pasó la fecha de vencimiento de ${n}`} de ${plural(open, "tarea abierta", "tareas abiertas")} (${pct} %).`,
+      impact: share >= 0.3 ? "Buena parte del trabajo pendiente ya está atrasada: las fechas del tablero dejaron de ser confiables." : "Posible retraso de la entrega.",
+      action: "Replanificar fechas o reasignar.",
+    });
   }
   risks.sort((a, b) => b.severity - a.severity);
 

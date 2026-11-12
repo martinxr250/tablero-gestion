@@ -401,6 +401,10 @@ export const integrationRoutes = [
               merged: r.merged,
               manual: r.linkedManually,
               updatedAt: r.remoteUpdatedAt,
+              // Verificación con IA guardada; "stale" si el PR recibió commits después.
+              aiReview: r.aiReview
+                ? { ...r.aiReview, reviewedAt: r.aiReviewAt, sha: r.aiReviewSha?.slice(0, 7) ?? null, stale: !!r.headSha && !!r.aiReviewSha && r.headSha !== r.aiReviewSha }
+                : null,
             })),
         };
       }),

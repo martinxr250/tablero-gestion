@@ -12,6 +12,7 @@ import { api, ApiError } from "@/lib/api";
 import { parseCsv, parsePasted, parseRows, type Cell, type DraftRow } from "@/lib/bulk-parse";
 import type { BoardData } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { plural } from "@/lib/plural";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 const MAX_ROWS = 200;
@@ -149,7 +150,7 @@ export function BulkDialog({ data, open, onOpenChange, aiFileId }: { data: Board
     onSuccess: (r) => {
       setResults(r.results);
       const failed = r.results.filter((x) => x.error).length;
-      toast.success(`${r.created} tareas creadas${failed ? ` · ${failed} issue(s) con error` : ""}`);
+      toast.success(`${r.created === 1 ? "1 tarea creada" : `${r.created} tareas creadas`}${failed ? ` · ${plural(failed, "issue", "issues")} con error` : ""}`);
       qc.invalidateQueries({ queryKey: ["board", data.board.id] });
     },
     onError: (e) => {

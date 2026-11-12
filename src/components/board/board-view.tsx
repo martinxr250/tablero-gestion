@@ -29,6 +29,7 @@ import { InsightsView } from "./views/insights-view";
 import { ListView } from "./views/list-view";
 import { SprintsView } from "./views/sprints-view";
 import type { RepoInfo } from "./repo-settings";
+import { plural } from "@/lib/plural";
 
 // Preferencia "resumen del tablero contraído", guardada en el navegador. Contraído por defecto.
 const HEADER_KEY = "tableros.boardHeaderCompact";
@@ -185,7 +186,7 @@ export function BoardView({ boardId }: { boardId: string }) {
       const others = r.changes.filter((c) => c.actorId && c.actorId !== me?.user.id);
       if (others.length) {
         const last = others[others.length - 1]!;
-        toast(`${last.actorName ?? "Alguien"} ${describeActivity(last)}`, { description: others.length > 1 ? `y ${others.length - 1} cambio(s) más` : undefined });
+        toast(`${last.actorName ?? "Alguien"} ${describeActivity(last)}`, { description: others.length > 1 ? `y ${plural(others.length - 1, "cambio", "cambios")} más` : undefined });
         const ids = new Set(others.map((c) => c.cardId).filter(Boolean) as string[]);
         setHighlight(ids);
         setTimeout(() => setHighlight(new Set()), 4000);

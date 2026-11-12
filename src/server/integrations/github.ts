@@ -1,6 +1,6 @@
 import "server-only";
 import { AppError } from "../core/errors";
-import type { IssueInput, RemoteIssue, RemotePull, RemoteRepo, VcsClient } from "./provider";
+import type { IssueInput, RemoteIssue, RemotePull, RemotePullFile, RemoteRepo, VcsClient } from "./provider";
 
 // URL fija: no se aceptan hosts ingresados por el usuario (sin riesgo de SSRF).
 export const GITHUB_API = "https://api.github.com";
@@ -116,6 +116,20 @@ export class GitHubClient implements VcsClient {
 
   async getPull(repo: string, number: number) {
     return toPull((await this.req<GhPull>("GET", `/repos/${this.repo(repo)}/pulls/${number}`)).data);
+  }
+
+  async getPullFiles(repo: string, number: number, max: number) {
+    const files: RemotePullFile[] = [];
+    let hasMore = true;
+    for (let page = 1; hasMore && files.length < max; page++) {
+      const r = await this.req<{ filename: string; status: string; additions: number; deletions: number; patch?: string }[]>(
+        "GET",
+        `/repos/${this.repo(repo)}/pulls/${number}/files?per_page=100&page=${page}`,
+      );
+      files.push(...r.data.map((f) => ({ path: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })));
+      hasMore = r.hasMore;
+    }
+    return { files: files.slice(0, max), hasMore: hasMore || files.length > max };
   }
 
   async checksStatus(repo: string, sha: string) {

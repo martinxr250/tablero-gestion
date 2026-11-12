@@ -67,6 +67,13 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const mini = useSyncExternalStore(subscribeMini, readMini, () => true);
+  // El servidor no conoce la preferencia guardada: sin esto, al hidratar el menú se "estiraba"
+  // del riel al ancho completo con los textos partidos. Se anima recién después de la primera pintura.
+  const [animate, setAnimate] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setAnimate(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
@@ -97,7 +104,8 @@ function Shell({ user, children }: { user: ShellUser; children: ReactNode }) {
       {navOpen && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground transition-[transform,width] md:static md:translate-x-0 md:border-r",
+          "fixed inset-y-0 left-0 z-40 w-[17rem] shrink-0 bg-sidebar text-sidebar-foreground md:static md:translate-x-0 md:border-r",
+          animate && "transition-[transform,width]",
           navOpen ? "translate-x-0" : "-translate-x-full",
           mini && "md:w-[5rem]",
         )}
@@ -162,7 +170,7 @@ function NavLink({ href, icon: Icon, label, active, mini }: { href: string; icon
         mini && active && "md:bg-sidebar-primary md:shadow-lg md:shadow-primary/30 md:hover:bg-sidebar-primary",
       )}
     >
-      <Icon className="size-[1.1rem] shrink-0" /> <span className={cn(mini && "md:hidden")}>{label}</span>
+      <Icon className="size-[1.1rem] shrink-0" /> <span className={cn("truncate whitespace-nowrap", mini && "md:hidden")}>{label}</span>
     </Link>
   );
 }

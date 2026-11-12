@@ -7,6 +7,7 @@ import { AppError } from "../core/errors";
 import { withUser, type Tx } from "../db/client";
 import { boardRepos, boards, type CompletionRules, type RuleLevel } from "../db/schema";
 import { boardAccess, cardAccess } from "./access";
+import { plural } from "@/lib/plural";
 
 type Board = typeof boards.$inferSelect;
 type CardRow = { id: string; boardId: string; qaStatus: string; title: string };
@@ -82,15 +83,15 @@ export async function evaluateCompletion(tx: Tx, board: Board, card: CardRow): P
     switch (rule.key) {
       case "subtasks":
         ok = f.subtasks_open === 0;
-        detail = `${f.subtasks_open} subtarea(s) sin terminar`;
+        detail = `${plural(f.subtasks_open, "subtarea", "subtareas")} sin terminar`;
         break;
       case "dependencies":
         ok = f.blockers_open === 0;
-        detail = `Depende de ${f.blockers_open} tarea(s) sin terminar`;
+        detail = `Depende de ${plural(f.blockers_open, "tarea", "tareas")} sin terminar`;
         break;
       case "checklists":
         ok = f.checklist_open === 0;
-        detail = `${f.checklist_open} ítem(s) de checklist pendientes`;
+        detail = f.checklist_open === 1 ? "1 ítem de checklist pendiente" : `${f.checklist_open} ítems de checklist pendientes`;
         break;
       case "prApproved":
         ok = f.prs_approved === f.prs_total && f.prs_changes === 0;
@@ -98,11 +99,11 @@ export async function evaluateCompletion(tx: Tx, board: Board, card: CardRow): P
         break;
       case "ciPassing":
         ok = f.checks_failed === 0 && f.checks_pending === 0 && f.checks_ok > 0;
-        detail = f.checks_failed ? `${f.checks_failed} pull request(s) con checks fallidos` : f.checks_pending ? "Hay checks en curso" : "No hay resultados de checks";
+        detail = f.checks_failed ? `${plural(f.checks_failed, "pull request", "pull requests")} con checks fallidos` : f.checks_pending ? "Hay checks en curso" : "No hay resultados de checks";
         break;
       case "prMerged":
         ok = f.prs_merged === f.prs_total;
-        detail = `${f.prs_total - f.prs_merged} pull request(s) sin fusionar`;
+        detail = `${plural(f.prs_total - f.prs_merged, "pull request", "pull requests")} sin fusionar`;
         break;
     }
     if (rule.github && githubDown && !ok) detail += " (la última sincronización con GitHub falló: no se pudo verificar)";

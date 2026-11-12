@@ -5,9 +5,11 @@ import { AlertTriangle, CircleCheck, CircleDot, CircleX, Clock, ExternalLink, Gi
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Input } from "@/components/ui/primitives";
+import { useAiEnabled } from "@/lib/ai";
 import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PrReview, type PrAiReview } from "./pr-review";
 
 type Deploy = { envKind: "preview" | "staging" | "production" | "other"; environment: string; state: string; url: string | null; sha: string; finishedAt: string | null; startedAt: string | null };
 type Dev = {
@@ -25,7 +27,7 @@ type Dev = {
   } | null;
   pulls: {
     number: number; title: string; state: string; url: string; author: string | null; branch: string | null; draft: boolean;
-    checks: string | null; review: string | null; merged: boolean; manual: boolean; updatedAt: string | null;
+    checks: string | null; review: string | null; merged: boolean; manual: boolean; updatedAt: string | null; aiReview: PrAiReview | null;
   }[];
 };
 
@@ -86,6 +88,10 @@ function Deployments({ items, lastProd }: { items: Deploy[]; lastProd: string | 
 export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId: string; canEdit: boolean }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["card-dev", cardId], queryFn: () => api<Dev>(`/cards/${cardId}/dev`) });
+  const aiEnabled = useAiEnabled();
+  const review = (p: Dev["pulls"][number]) => (
+    <PrReview cardId={cardId} number={p.number} review={p.aiReview} canRun={canEdit && aiEnabled} onDone={() => qc.invalidateQueries({ queryKey: ["card-dev", cardId] })} />
+  );
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["card-dev", cardId] });
     qc.invalidateQueries({ queryKey: ["card", cardId] });
@@ -217,6 +223,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                       {p.merged ? "Fusionado (no implica desplegado)" : p.state === "open" ? (p.review === "approved" ? "Abierto · aprobado, sin fusionar" : "Abierto") : "Cerrado sin fusionar"} · {p.branch}{" "}
                       {p.author && `· ${p.author}`} {p.updatedAt && `· ${ago(p.updatedAt)}`}
                     </span>
+                    {review(p)}
                   </li>
                 );
               })}
@@ -228,7 +235,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
       {!issue && data.pulls.length > 0 && (
         <ul className="mt-2 space-y-1.5">
           {data.pulls.map((p) => (
-            <li key={p.number} className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+            <li key={p.number} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
               {p.merged ? <GitMerge className="size-4 text-violet-500" /> : <GitPullRequest className="size-4 text-success" />}
               <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium hover:text-primary">
                 #{p.number} {p.title}
@@ -240,6 +247,7 @@ export function DevPanel({ cardId, boardId, canEdit }: { cardId: string; boardId
                   <Link2Off className="size-3.5" />
                 </button>
               )}
+              {review(p)}
             </li>
           ))}
         </ul>

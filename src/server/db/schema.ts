@@ -430,7 +430,23 @@ export const cardDevRefs = app.table("card_dev_refs", {
   linkedManually: boolean("linked_manually").notNull().default(false),
   headSha: text("head_sha"),
   mergeSha: text("merge_sha"),
+  aiReview: jsonb("ai_review").$type<PrAiReview | null>(),
+  aiReviewAt: ts("ai_review_at"),
+  aiReviewSha: text("ai_review_sha"),
+  aiReviewBy: uuid("ai_review_by"),
 });
+
+/** Resultado guardado de "¿Cumple el PR lo que pide la tarjeta?". */
+export type PrAiReview = {
+  verdict: "meets" | "partial" | "missing" | "no_criteria";
+  summary: string;
+  requirements: { text: string; status: "met" | "partial" | "missing" | "unclear"; evidence: string; files: string[] }[];
+  extras: string[];
+  risks: string[];
+  filesAnalyzed: number;
+  filesTotal: number;
+  truncated: boolean;
+};
 
 export const vcsUserLinks = app.table(
   "vcs_user_links",

@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { ago } from "@/lib/format";
 import { Artwork } from "@/components/ui/artwork";
 import type { BoardData } from "@/lib/types";
+import { plural } from "@/lib/plural";
 
 export type RepoInfo = {
   id: string;
@@ -213,8 +214,8 @@ function LinkedRepo({ repo, data, onChange }: { repo: RepoInfo; data: BoardData;
       {repo.lastSyncError && <Alert>Último error: {repo.lastSyncError}</Alert>}
       {(repo.pending > 0 || repo.conflicts > 0) && (
         <Alert tone="info">
-          {repo.pending > 0 && `${repo.pending} cambio(s) pendiente(s) de enviar. `}
-          {repo.conflicts > 0 && `${repo.conflicts} conflicto(s) para resolver desde la tarjeta.`}
+          {repo.pending > 0 && `${plural(repo.pending, "cambio pendiente", "cambios pendientes")} de enviar. `}
+          {repo.conflicts > 0 && `${plural(repo.conflicts, "conflicto", "conflictos")} para resolver desde la tarjeta.`}
         </Alert>
       )}
       <div className="grid gap-4 sm:grid-cols-3">

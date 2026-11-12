@@ -29,6 +29,9 @@ export type RemotePull = {
   updatedAt: string;
 };
 
+/** Archivo cambiado en un PR; `patch` falta en binarios o diffs muy grandes. */
+export type RemotePullFile = { path: string; status: string; additions: number; deletions: number; patch: string | null };
+
 export type RemoteDeployment = {
   id: number;
   sha: string;
@@ -55,6 +58,8 @@ export interface VcsClient {
   updateIssue(repo: string, number: number, input: IssueInput): Promise<RemoteIssue>;
   listPulls(repo: string, page: number): Promise<{ pulls: RemotePull[]; hasMore: boolean }>;
   getPull(repo: string, number: number): Promise<RemotePull>;
+  /** Archivos cambiados del PR (hasta `max`) y si hay más de los que se trajeron. */
+  getPullFiles(repo: string, number: number, max: number): Promise<{ files: RemotePullFile[]; hasMore: boolean }>;
   listDeployments(repo: string, perPage: number): Promise<RemoteDeployment[]>;
   latestDeploymentStatus(repo: string, id: number): Promise<RemoteDeploymentStatus>;
   /** true si el commit `base` está incluido en `head` (comparación de GitHub). */
