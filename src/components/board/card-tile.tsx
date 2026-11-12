@@ -138,7 +138,8 @@ export function CardTile({
         {card.excerpt && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{card.excerpt}</p>}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-dashed px-3.5 py-2.5 text-xs text-muted-foreground">
+      {/* Con muchos indicadores (archivos, puntos, subtareas, checklist, comentarios, issue) pasan a otra línea en vez de cortarse. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-dashed px-3.5 py-2.5 text-xs text-muted-foreground">
         <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap" title="Archivos">
           <Paperclip className="size-3.5" aria-hidden /> {card.attachmentCount} {card.attachmentCount === 1 ? "archivo" : "archivos"}
         </span>
@@ -168,7 +169,7 @@ export function CardTile({
           </span>
         )}
         {labelNames.length > 0 && (
-          <span className="ml-auto inline-flex min-w-0 items-center gap-1" title="Etiquetas">
+          <span className="ml-auto inline-flex max-w-full min-w-0 items-center gap-1" title="Etiquetas">
             <Tag className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">{labelNames.join(", ")}</span>
           </span>
